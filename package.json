@@ -1,0 +1,65 @@
+{
+  "name": "answer-bot-backend",
+  "version": "1.0.0",
+  "description": "答题助手后端",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "NODE_ENV=development node index.js",
+    "prod": "NODE_ENV=production node index.js",
+    "build": "npx pkg . --targets node18-win-x64 --output answer-bot.exe --public",
+    "clean": "rm -rf node_modules package-lock.json && npm install",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "test:unit": "jest --testPathPattern=tests/unit",
+    "test:integration": "jest --testPathPattern=tests/integration"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "express": "^4.18.2",
+    "fuse.js": "^7.3.0",
+    "iconv-lite": "^0.7.2",
+    "puppeteer": "^25.0.4",
+    "uuid": "^14.0.0",
+    "ws": "^8.20.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.19.0",
+    "jest": "^30.4.2",
+    "pkg": "^5.8.1",
+    "supertest": "^7.2.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "roots": [
+      "<rootDir>/tests"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/前端/",
+      "/dati/",
+      "/题库导入/",
+      "/coverage/"
+    ],
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "*.js",
+      "!node_modules/**",
+      "!coverage/**",
+      "!tests/**",
+      "!前端/**",
+      "!dati/**"
+    ],
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(uuid)/)"
+    ]
+  }
+}

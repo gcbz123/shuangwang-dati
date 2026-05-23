@@ -1,0 +1,17 @@
+{
+  "name": "Ant Design Vue",
+  "description": "适用于使用Ant Design Vue组件库的考试系统",
+  "questionContainer": [
+    ".ti",
+    ".ant-form-item",
+    "[class*='question']"
+  ],
+  "optionLabels": "label.ant-radio-wrapper, label.ant-checkbox-wrapper",
+  "nextButton": [
+    ".ant-btn-primary",
+    "button.ant-btn:not(.ant-btn-disabled)",
+    "[data-action='next']"
+  ],
+  "submitButton": "button.ant-btn:contains('提交'), .submit-button",
+  "textarea": "textarea.ant-input, input[type='text'].ant-input"
+}

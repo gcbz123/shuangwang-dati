@@ -1,0 +1,19 @@
+﻿node_modules/
+question_bank.json
+题库导入/
+tests/消防题库187.txt
+page/
+.env*
+server.log
+.DS_Store
+Thumbs.db
+
+web/tools/google chrome*
+
+*.exe
+
+*.7z
+
+coverage/
+
+extracted_questions.json

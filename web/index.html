@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>答题助手</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { padding: 24px; font-family: -apple-system, "Segoe UI", sans-serif; background: #f5f5f5; }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 20px; margin-bottom: 16px; }
+    .status-bar { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
+    .status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .status.on { background: #34a853; }
+    .status.off { background: #ea4335; }
+    .nav { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid #ddd; flex-wrap: wrap; }
+    .nav button { padding: 8px 20px; cursor: pointer; border: none; background: none; font-size: 14px; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+    .nav button.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: 600; }
+    .nav button:hover { color: #333; }
+    .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .card h3 { font-size: 14px; margin-bottom: 10px; color: #333; }
+    textarea { width: 100%; height: 260px; border: 1px solid #ccc; border-radius: 4px; padding: 10px; font-size: 13px; font-family: Consolas, monospace; resize: vertical; }
+    .btn { display: inline-block; padding: 8px 24px; margin: 4px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #1a73e8; color: #fff; }
+    .btn-primary:hover { background: #1557b0; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-success { background: #34a853; color: #fff; }
+    .btn-success:hover { background: #2d9249; }
+    .btn-success:disabled { opacity: 0.5; cursor: not-allowed; }
+    pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; max-height: 300px; overflow-y: auto; }
+    .config-row { margin-bottom: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+    .config-row input[type="number"] { width: 60px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .file-input-wrapper { margin-bottom: 10px; }
+    .format-select { padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
+    .mode-group { display: flex; gap: 16px; margin: 10px 0; }
+    .mode-group label { cursor: pointer; font-size: 14px; }
+    .status { padding: 10px; display: none; margin-top: 10px; border-radius: 4px; font-size: 13px; }
+    .status.success { background: #e6f4ea; color: #1e7e34; border: 1px solid #b7e1cd; display: block; }
+    .status.error { background: #fce8e6; color: #c5221f; border: 1px solid #f5c6cb; display: block; }
+    .top-bar { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 16px; gap: 12px; font-size: 13px; }
+    .top-bar .btn { padding: 6px 16px; margin: 0; }
+    
+    /* Modal styles */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 9999; }
+    .modal-box { background: #fff; border-radius: 8px; padding: 24px; width: 320px; }
+    .modal-box h3 { margin-bottom: 12px; font-size: 16px; }
+    .modal-box input { width: 100%; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 12px; font-size: 14px; }
+    .modal-box .error { color: #c5221f; font-size: 13px; margin-bottom: 8px; display: none; }
+    .modal-box .btn-row { display: flex; gap: 8px; justify-content: flex-end; }
+    
+    /* Tool list styles */
+    .tool-list { display: flex; flex-direction: column; gap: 10px; }
+    .tool-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid #e8e8e8; border-radius: 6px; background: #fff; }
+    .tool-item .tool-info { flex: 1; }
+    .tool-item .tool-name { font-weight: 600; font-size: 14px; color: #333; }
+    .tool-item .tool-desc { color: #666; font-size: 12px; margin-top: 4px; }
+    .tool-item kbd { background: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; padding: 2px 6px; font-size: 11px; font-family: Consolas, monospace; }
+    .tool-item .btn { padding: 6px 16px; margin: 0; font-size: 13px; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="top-bar">
+      <span id="userInfo"></span>
+      <button class="btn" id="loginBtn" onclick="showLoginModal()" style="background: #1a73e8; color: #fff;">管理员登录</button>
+      <button class="btn" id="logoutBtn" onclick="logout()" style="background: #ddd; color: #333; display: none;">退出登录</button>
+    </div>
+    <h1>答题助手</h1>
+
+    <div class="status-bar">
+      <span><span class="status" id="statusDot"></span><span id="statusText">检查连接...</span></span>
+    </div>
+
+    <div class="nav">
+      <button class="tab-btn active" onclick="switchTab('match')">答案匹配</button>
+      <button class="tab-btn" onclick="switchTab('search')">题库查询</button>
+      <button class="tab-btn" onclick="switchTab('manage')">题库管理</button>
+      <button class="tab-btn" onclick="switchTab('tools')">工具下载</button>
+    </div>
+
+    <!-- Tab: 答案匹配 -->
+    <div id="tab-match" class="tab-content active">
+      <div class="card">
+        <h3>匹配相似度设置</h3>
+        <div class="config-row">
+          <input type="range" id="thresholdRange" min="0" max="1" step="0.01" value="0.35" oninput="syncThresholdFromRange()">
+          <input type="number" id="thresholdInput" min="0" max="1" step="0.01" value="0.35" oninput="syncThresholdFromInput()">
+          <button class="btn btn-primary" id="saveThresholdBtn" onclick="saveThreshold()" style="margin: 0;">保存</button>
+          <span style="color: #666;">越小越严格，越大越宽松</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>粘贴网页源码</h3>
+        <textarea id="htmlInput" placeholder="在此粘贴网页源码...&#10;&#10;支持从在线答题系统复制HTML源码，系统将自动解析题目并匹配答案"></textarea>
+        <button class="btn btn-primary" id="sendBtn" onclick="sendData()">发送解析</button>
+      </div>
+
+      <div class="card" id="responseBox" style="display: none;">
+        <h3>📋 后端返回结果</h3>
+        <pre id="responseData"></pre>
+      </div>
+    </div>
+
+    <!-- Tab: 题库查询 -->
+    <div id="tab-search" class="tab-content">
+      <div class="card">
+        <h3>🔍 题库查询</h3>
+        <p style="color: #666; margin-bottom: 10px; font-size: 13px;">输入题干关键词，快速查找题库中是否有记录</p>
+        <div class="config-row">
+          <input type="text" id="searchInput" placeholder="输入题干关键词..." style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+          <button class="btn btn-primary" id="searchBtn" onclick="searchQuestionBank()">查询</button>
+        </div>
+        <div id="searchResults" style="margin-top: 12px;"></div>
+      </div>
+    </div>
+
+    <!-- Tab: 题库管理 (Protected) -->
+    <div id="tab-manage" class="tab-content">
+      <div class="card">
+        <h3>题库导入</h3>
+
+        <!-- 相似度设置 -->
+        <div class="config-row">
+          <label>匹配相似度：</label>
+          <input type="range" id="thresholdRange2" min="0" max="1" step="0.01" value="0.35" oninput="syncThresholdFromRange2()">
+          <input type="number" id="thresholdInput2" min="0" max="1" step="0.01" value="0.35" oninput="syncThresholdFromInput2()">
+          <span style="color: #666;">越小越严格，越大越宽松</span>
+        </div>
+        <div class="config-row">
+          <label>环境：</label>
+          <label><input type="radio" name="env2" value="development" checked onclick="switchEnv2()"> 开发</label>
+          <label><input type="radio" name="env2" value="production" onclick="switchEnv2()"> 生产</label>
+          <button class="btn btn-primary" onclick="saveThreshold2()" style="margin: 0;">保存</button>
+          <span id="envWarning" style="color: #c5221f; font-weight: bold; margin-left: 10px; display: none;">⚠️ 生产模式不能导入题库</span>
+        </div>
+
+        <!-- 导入模式选择 -->
+        <div class="mode-group">
+          <label>
+            <input type="radio" name="importMode" value="convert" checked onchange="toggleImportMode()">
+            🔄 格式转换后导入
+          </label>
+          <label>
+            <input type="radio" name="importMode" value="direct" onchange="toggleImportMode()">
+            ⚡ 直接导入（符合规则的文件）
+          </label>
+        </div>
+
+        <div class="file-input-wrapper">
+          <input type="file" id="fileInput" accept=".txt,.xlsx,.xls" multiple style="font-size: 13px;">
+        </div>
+
+        <div class="config-row">
+          <select class="format-select" id="encodingSelect">
+            <option value="gbk">GBK 编码</option>
+            <option value="utf-8">UTF-8 编码</option>
+          </select>
+          <select class="format-select" id="formatSelect">
+            <option value="auto">🔍 自动检测</option>
+            <option value="1">📊 格式1 - 题库导出.txt (Excel导出)</option>
+            <option value="2">🌐 格式2 - 网页导出.txt (网页导出)</option>
+            <option value="3">📋 格式3 - Excel文件 (.xlsx/.xls)</option>
+            <option value="4">🌐 格式4 - 局网考试原始题库.txt</option>
+            <option value="5">📝 格式5 - 局网考试单行题库.txt</option>
+          </select>
+        </div>
+
+        <button class="btn btn-primary" id="actionBtn" onclick="handleAction()">转换</button>
+        <button class="btn btn-success" id="downloadBtn" onclick="downloadResult()" style="display: none;">下载结果</button>
+        <button class="btn btn-success" id="importBtn" onclick="importToBank()" style="display: none;">导入题库</button>
+
+        <div id="actionStatus" class="status"></div>
+      </div>
+
+      <div class="card" id="convertResultBox" style="display: none;">
+        <h3>📝 转换结果</h3>
+        <pre id="convertResult"></pre>
+      </div>
+    </div>
+
+    <!-- Tab: 工具下载 -->
+    <div id="tab-tools" class="tab-content">
+      <div class="card">
+        <h3>🔧 工具下载</h3>
+        <div class="tool-list">
+          <div class="tool-item">
+            <div class="tool-info">
+              <div class="tool-name">Google Chrome 浏览器</div>
+              <div class="tool-desc">Win10/11 离线安装包，用于访问在线答题系统</div>
+            </div>
+            <a class="btn btn-primary" href="tools/google%20chrome%20win10-11_120.0.6099.130.exe" download>下载</a>
+          </div>
+          <div class="tool-item">
+            <div class="tool-info">
+              <div class="tool-name">脚本猫 (ScriptCat)</div>
+              <div class="tool-desc">浏览器扩展，用于管理运行油猴脚本</div>
+            </div>
+            <a class="btn btn-primary" href="tools/脚本猫.zip" download>下载</a>
+          </div>
+          <div class="tool-item">
+            <div class="tool-info">
+              <div class="tool-name">自动答题脚本</div>
+              <div class="tool-desc">油猴脚本，配合答题助手自动填充答案（安装后按 <kbd>-</kbd> 获取源码，<kbd>+</kbd> 开始答题）</div>
+            </div>
+            <a class="btn btn-primary" href="tools/auto-answer.user.js" download>下载</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Login Modal -->
+  <div id="loginModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3>🔐 管理员登录</h3>
+      <p style="font-size:13px; color:#666; margin-bottom:12px;">题库管理功能需要管理员权限</p>
+      <input type="password" id="adminPassword" placeholder="请输入管理员密码" onkeyup="if(event.key==='Enter')login()">
+      <div class="error" id="loginMsg"></div>
+      <div class="btn-row">
+        <button class="btn" style="background:#ddd;color:#333;" onclick="closeLoginModal()">取消</button>
+        <button class="btn btn-primary" onclick="login()">确认</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // 环境配置
+  const ENV_CONFIG = {
+    development: 'http://localhost:3500',
+    production: 'http://localhost:3500'
+  };
+  let currentEnv = localStorage.getItem('env') || 'development';
+  let API_URL = ENV_CONFIG[currentEnv] || ENV_CONFIG.development;
+
+  const ADMIN_PASSWORD = 'sycwd123';
+  let isLoggedIn = false;
+
+  let currentMode = 'convert';
+  let conversionResult = '';
+  let lastDetectedFormat = 2;
+
+  // ---- Health check ----
+  async function checkHealth() {
+    const dot = document.getElementById('statusDot');
+    const text = document.getElementById('statusText');
+    try {
+      const r = await fetch(API_URL + '/api/health');
+      dot.className = 'status ' + (r.ok ? 'on' : 'off');
+      text.textContent = r.ok ? '服务运行中' : '服务异常';
+    } catch { dot.className = 'status off'; text.textContent = '无法连接'; }
+  }
+  checkHealth();
+  setInterval(checkHealth, 30000);
+
+  // ---- Auth Logic ----
+  function showLoginModal() {
+    document.getElementById('loginModal').style.display = 'flex';
+    document.getElementById('adminPassword').focus();
+  }
+
+  function closeLoginModal() {
+    document.getElementById('loginModal').style.display = 'none';
+    document.getElementById('adminPassword').value = '';
+    document.getElementById('loginMsg').style.display = 'none';
+  }
+
+  function login() {
+    const password = document.getElementById('adminPassword').value;
+    if (password === ADMIN_PASSWORD) {
+      isLoggedIn = true;
+      localStorage.setItem('adminLogin', 'true');
+      closeLoginModal();
+      updateAuthUI();
+      switchTab('manage');
+    } else {
+      const msg = document.getElementById('loginMsg');
+      msg.textContent = '密码错误！';
+      msg.style.display = 'block';
+    }
+  }
+
+  function logout() {
+    isLoggedIn = false;
+    localStorage.removeItem('adminLogin');
+    updateAuthUI();
+    switchTab('match');
+  }
+
+  function updateAuthUI() {
+    document.getElementById('loginBtn').style.display = isLoggedIn ? 'none' : 'inline-block';
+    document.getElementById('logoutBtn').style.display = isLoggedIn ? 'inline-block' : 'none';
+  }
+
+  // Check login on load
+  function checkLogin() {
+    const savedLogin = localStorage.getItem('adminLogin');
+    if (savedLogin === 'true') {
+      isLoggedIn = true;
+      updateAuthUI();
+      loadThreshold();
+      syncEnvUI();
+    }
+  }
+
+  // ---- Tab Switching ----
+  function switchTab(tab) {
+    // Check auth for manage tab
+    if (tab === 'manage' && !isLoggedIn) {
+      showLoginModal();
+      return;
+    }
+
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+    // Map tab names to indices
+    const tabMap = { 'match': 0, 'search': 1, 'manage': 2, 'tools': 3 };
+    document.querySelectorAll('.tab-btn')[tabMap[tab]].classList.add('active');
+    document.getElementById('tab-' + tab).classList.add('active');
+
+    // Lazy load xlsx if entering manage tab
+    if (tab === 'manage') {
+      loadXlsxIfNeeded().catch(err => console.error('预加载 xlsx 失败:', err));
+    }
+  }
+
+  // ---- XLSX Loader ----
+  let xlsxLoading = null;
+  function loadXlsxIfNeeded() {
+    if (typeof XLSX !== 'undefined') return Promise.resolve();
+    if (xlsxLoading) return xlsxLoading;
+    xlsxLoading = new Promise((resolve, reject) => {
+      loadScript('/scripts/xlsx.min.js', resolve, () => {
+        loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', resolve, () => {
+          loadScript('https://cdn.bootcdn.net/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', resolve, () => {
+            reject(new Error('xlsx 库加载失败'));
+          });
+        });
+      });
+      function loadScript(src, onload, onerror) {
+        const script = document.createElement('script');
+        script.src = src; script.onload = onload; script.onerror = onerror;
+        document.head.appendChild(script);
+      }
+    });
+    return xlsxLoading;
+  }
+
+  // ---- Search Function ----
+  async function searchQuestionBank() {
+    const q = document.getElementById('searchInput').value.trim();
+    const resDiv = document.getElementById('searchResults');
+    const btn = document.getElementById('searchBtn');
+    
+    if (!q) { resDiv.innerHTML = '<p style="color:#666; font-size:13px;">请输入题干关键词</p>'; return; }
+    
+    btn.disabled = true; btn.textContent = '查询中...';
+    resDiv.innerHTML = '<p style="color:#666; font-size:13px;">正在检索题库...</p>';
+    
+    try {
+      const res = await fetch(API_URL + '/api/question-bank/search?q=' + encodeURIComponent(q));
+      const data = await res.json();
+      
+      if (!data.success || data.questions.length === 0) {
+        resDiv.innerHTML = '<div class="status error" style="display:block;">未找到包含该关键词的题目</div>';
+        return;
+      }
+      
+      let html = '<div style="font-size:13px; color:#666; margin-bottom:8px;">共找到 <strong style="color:#1a73e8;">' + data.questions.length + '</strong> 条结果</div>';
+      html += '<div style="max-height:400px; overflow-y:auto;">';
+      
+      data.questions.forEach(item => {
+        const typeMap = { 'single_choice': '单选', 'multiple_choice': '多选', 'judgment': '判断', 'short_answer': '简答' };
+        const typeLabel = typeMap[item.question_type] || item.question_type || '未知';
+        
+        html += '<div style="border:1px solid #e8e8e8; padding:10px; margin-bottom:8px; border-radius:6px; background:#fafafa;">';
+        html += '<div style="font-weight:600; margin-bottom:6px; font-size:14px;">' + escHtml(item.question) + '</div>';
+        html += '<div style="font-size:12px; color:#666; display:flex; gap:12px; flex-wrap:wrap;">';
+        html += '<span>答案: <strong style="color:#1e7e34;">' + escHtml(item.answer) + '</strong></span>';
+        html += '<span>类型: <span class="type-badge" style="background:#e8f0fe; color:#1a73e8; padding:1px 6px; border-radius:4px;">' + typeLabel + '</span></span>';
+        html += '<span>来源: ' + (item.source || '-') + '</span>';
+        html += '</div></div>';
+      });
+      
+      html += '</div>';
+      resDiv.innerHTML = html;
+    } catch (e) {
+      resDiv.innerHTML = '<div class="status error" style="display:block;">查询失败: ' + e.message + '</div>';
+    } finally {
+      btn.disabled = false; btn.textContent = '查询';
+    }
+  }
+
+  function escHtml(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  // ---- Import Logic (From Admin) ----
+  function toggleImportMode() {
+    const mode = document.querySelector('input[name="importMode"]:checked').value;
+    currentMode = mode;
+    const actionBtn = document.getElementById('actionBtn');
+    const formatRow = document.getElementById('formatSelect').parentElement;
+    if (mode === 'direct') {
+      actionBtn.textContent = '⚡ 直接导入'; formatRow.style.display = 'none';
+    } else {
+      actionBtn.textContent = '🔄 转换'; formatRow.style.display = 'flex';
+    }
+    document.getElementById('downloadBtn').style.display = 'none';
+    document.getElementById('importBtn').style.display = 'none';
+    document.getElementById('convertResultBox').style.display = 'none';
+    document.getElementById('actionStatus').style.display = 'none';
+  }
+
+  async function handleAction() {
+    const fileInput = document.getElementById('fileInput');
+    if (!fileInput.files || fileInput.files.length === 0) { showStatus('请选择要导入的文件', 'error'); return; }
+    if (currentMode === 'convert') await convertFile(); else await directImport();
+  }
+
+  function readFileAsText(file, encoding = 'gbk') {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => { const decoder = new TextDecoder(encoding); resolve(decoder.decode(e.target.result)); };
+      reader.onerror = () => reject(new Error('文件读取失败'));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function showStatus(message, type) {
+    const statusDiv = document.getElementById('actionStatus');
+    statusDiv.className = 'status ' + type; statusDiv.textContent = message; statusDiv.style.display = 'block';
+  }
+
+  function cleanText(text) {
+    if (!text) return text;
+    let result = [];
+    for (let i = 0; i < text.length; i++) {
+      let code = text.charCodeAt(i);
+      if (code === 0x3000) result.push(' ');
+      else if (code >= 0xFF01 && code <= 0xFF5E) result.push(String.fromCharCode(code - 0xFEE0));
+      else result.push(text[i]);
+    }
+    return result.join('').replace(/\s+/g, ' ');
+  }
+
+  function convertExcelToText(excelData) {
+    if (!excelData || excelData.length < 10) return [];
+    const results = []; let questionCounter = 0;
+    for (let i = 9; i < excelData.length; i++) {
+      const row = excelData[i]; if (!row || row.length < 15) continue;
+      const question = row[2] ? cleanText(String(row[2]).trim()) : '';
+      const qtype = row[3] ? cleanText(String(row[3]).trim()) : '';
+      const correctOptions = row[6] ? cleanText(String(row[6]).trim()) : '';
+      const optionM = row[12] ? cleanText(String(row[12]).trim()) : '';
+      const optionN = row[13] ? cleanText(String(row[13]).trim()) : '';
+      const optionO = row[14] ? cleanText(String(row[14]).trim()) : '';
+      const optionP = row[15] ? cleanText(String(row[15]).trim()) : '';
+      if (!question) continue;
+      questionCounter++; let correct = '';
+      if (qtype.includes('判断题')) correct = correctOptions.toUpperCase() === 'A' ? 'A.对' : 'B.错';
+      else if (qtype.includes('简答题')) correct = correctOptions || '未找到答案';
+      else if (qtype.includes('单选题')) {
+        const map = { A: optionM, B: optionN, C: optionO, D: optionP };
+        correct = correctOptions.toUpperCase() + '.' + (map[correctOptions.toUpperCase()] || '未找到答案');
+      } else if (qtype.includes('多选题')) {
+        const opts = [];
+        if (correctOptions.toUpperCase().includes('A')) opts.push(optionM);
+        if (correctOptions.toUpperCase().includes('B')) opts.push(optionN);
+        if (correctOptions.toUpperCase().includes('C')) opts.push(optionO);
+        if (correctOptions.toUpperCase().includes('D')) opts.push(optionP);
+        correct = opts.map((opt, idx) => String.fromCharCode(65 + idx) + '.' + opt).join(';');
+      } else continue;
+      results.push(questionCounter + '. ' + question + ' 正确答案：' + correct);
+    }
+    return results;
+  }
+
+  function convertFormat1(content) {
+    const rawLines = content.split('\n'); let questions = []; let currentQ = null;
+    for (let i = 0; i < rawLines.length; i++) {
+      const parts = rawLines[i].trim().split('\t');
+      if (parts.length >= 2 && /^\d+$/.test(parts[1].trim())) { if (currentQ) questions.push(currentQ); currentQ = { parts: parts }; }
+      else if (currentQ) currentQ.parts = currentQ.parts.concat(parts);
+    }
+    if (currentQ) questions.push(currentQ);
+    let results = [];
+    for (let idx = 0; idx < questions.length; idx++) {
+      const q = questions[idx]; const parts = q.parts; if (parts.length < 6) continue;
+      const question = cleanText(parts[2] ? parts[2].trim() : ''); const qtype = parts[3] ? parts[3].trim() : '';
+      const answer = parts[6] ? parts[6].trim() : ''; let correct = '';
+      if (qtype === '判断题') correct = answer.toUpperCase() === 'A' ? 'A.对' : 'B.错';
+      else {
+        let options = []; [12, 13, 14, 15].forEach(i => { if (i < parts.length) { const opt = cleanText(parts[i].trim()); if (opt) options.push(opt); } });
+        if (qtype === '单选题') { const ansChar = answer.toUpperCase(); correct = ansChar + '.' + (options[ansChar.charCodeAt(0) - 65] || '未找到答案'); }
+        else if (qtype === '多选题') correct = options.map((opt, idx) => String.fromCharCode(65 + idx) + '.' + opt).join(';');
+        else correct = answer || '未找到答案';
+      }
+      if (question) results.push((idx + 1) + '. ' + question + ' 正确答案：' + correct);
+    }
+    return results;
+  }
+
+  function convertFormat2(content) {
+    const lines = content.split('\n').filter(l => l.trim()); let results = []; let currentNum = 0;
+    for (const line of lines) {
+      const numMatch = line.match(/^(\d+)[.、]/); if (numMatch) currentNum = parseInt(numMatch[1]);
+      const answerMatch = line.match(/正确答案[：:]\s*(.+)/);
+      if (answerMatch && currentNum > 0) {
+        const question = line.split('正确答案')[0].replace(/^\d+[.、]\s*/, '').trim();
+        if (question) results.push(currentNum + '. ' + question + ' 正确答案：' + answerMatch[1].trim());
+      }
+    }
+    return results;
+  }
+
+  function detectFormat(content) {
+    const lines = content.split('\n').filter(l => l.trim()); if (lines.length === 0) return 2;
+    const firstLine = lines[0]; const tabCount = (firstLine.match(/\t/g) || []).length;
+    if (tabCount >= 10) return 1;
+    if (firstLine.startsWith('<') && content.includes('正确答案')) return 5;
+    if (content.includes('标准答案：') && /第\d+题,本小题/.test(content)) return 4;
+    if (content.includes('正确答案')) return 2;
+    return 2;
+  }
+
+  function convertFormatJuwang(content) {
+    const lines = content.split('\n'); const results = []; let currentQ = null; let options = {}; let answer = ''; let globalNum = 0;
+    for (const line of lines) {
+      const trimmed = line.trim(); if (!trimmed) continue;
+      if (trimmed.match(/^第(\d+)题,本小题/)) {
+        if (currentQ && answer) { globalNum++; results.push(`${globalNum}. ${currentQ} 正确答案：${answer.trim()}.${options[answer.trim()] || answer.trim()}`); }
+        currentQ = null; options = {}; answer = ''; continue;
+      }
+      const ansMatch = trimmed.match(/^标准答案[：:]\s*([A-D])/i); if (ansMatch) { answer = ansMatch[1].toUpperCase(); continue; }
+      const optMatch = trimmed.match(/^([A-D])[．.、\s]*(.+)/i); if (optMatch) { options[optMatch[1].toUpperCase()] = optMatch[2].trim(); continue; }
+      if (!currentQ && !trimmed.match(/^[一二三四五六七八九十]+[、.]/) && !trimmed.match(/^(题解|本题得分)/)) currentQ = trimmed;
+    }
+    if (currentQ && answer) { globalNum++; results.push(`${globalNum}. ${currentQ} 正确答案：${answer.trim()}.${options[answer.trim()] || answer.trim()}`); }
+    return results;
+  }
+
+  function convertFormatJuwangSingle(content) {
+    const lines = content.split('\n').filter(l => l.trim()); const results = []; let globalNum = 0;
+    for (const line of lines) {
+      const trimmed = line.trim(); if (!trimmed.startsWith('<')) continue;
+      const ansIdx = trimmed.indexOf('正确答案'); if (ansIdx === -1) continue;
+      let question = trimmed.substring(1, ansIdx).trim();
+      let answerRaw = trimmed.substring(ansIdx + 4).replace(/^[：:]+\s*/, '').trim();
+      globalNum++; results.push(`${globalNum}. ${question} 正确答案：${answerRaw}`);
+    }
+    return results;
+  }
+
+  async function convertFile() {
+    const fileInput = document.getElementById('fileInput'); const formatSelect = document.getElementById('formatSelect');
+    const encodingSelect = document.getElementById('encodingSelect'); const actionBtn = document.getElementById('actionBtn');
+    actionBtn.disabled = true; actionBtn.textContent = '转换中...';
+    try {
+      await loadXlsxIfNeeded(); let allResults = [];
+      for (const file of fileInput.files) {
+        let results = [];
+        if (file.name.match(/\.xls[x]?$/i)) {
+          const buffer = await file.arrayBuffer(); const workbook = XLSX.read(buffer, { type: 'array' });
+          results = convertExcelToText(XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 }));
+        } else {
+          const content = await readFileAsText(file, encodingSelect.value);
+          const format = formatSelect.value === 'auto' ? detectFormat(content) : parseInt(formatSelect.value);
+          lastDetectedFormat = format;
+          if (format === 1 || format === 3) results = convertFormat1(content);
+          else if (format === 4) results = convertFormatJuwang(content);
+          else if (format === 5) results = convertFormatJuwangSingle(content);
+          else results = convertFormat2(content);
+        }
+        allResults = allResults.concat(results);
+      }
+      conversionResult = allResults.join('\n');
+      document.getElementById('convertResult').textContent = conversionResult;
+      document.getElementById('convertResultBox').style.display = 'block';
+      document.getElementById('downloadBtn').style.display = 'inline-block';
+      document.getElementById('importBtn').style.display = 'inline-block';
+      showStatus('转换完成！共 ' + allResults.length + ' 道题目', 'success');
+    } catch (err) { showStatus('转换失败: ' + err.message, 'error'); }
+    finally { actionBtn.disabled = false; actionBtn.textContent = '转换'; }
+  }
+
+  function downloadResult() {
+    if (!conversionResult) { alert('没有可下载的结果'); return; }
+    const blob = new Blob([conversionResult], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob); const a = document.createElement('a');
+    a.href = url; a.download = '整理后题库.txt'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+
+  async function importToBank() {
+    if (currentEnv === 'production') { alert('生产模式不能导入题库！'); return; }
+    if (!conversionResult) { alert('没有可导入的内容'); return; }
+    const importBtn = document.getElementById('importBtn'); importBtn.disabled = true; importBtn.textContent = '导入中...';
+    try {
+      const lines = conversionResult.split('\n'); const validLines = [];
+      for (const line of lines) { if (!line.includes('未找到答案')) validLines.push(line); }
+      if (validLines.length === 0) { alert('所有题目的答案都未找到，无法导入！'); importBtn.disabled = false; importBtn.textContent = '导入题库'; return; }
+      const format = document.getElementById('formatSelect').value;
+      const detected = format === 'auto' ? lastDetectedFormat : parseInt(format);
+      const source = (detected === 4 || detected === 5) ? '局网考试' : '职教考试';
+      const res = await fetch(API_URL + '/api/question-bank/import', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: validLines.join('\n'), source })
+      });
+      const data = await res.json(); if (!res.ok || !data.success) throw new Error(data.error || '导入失败');
+      alert('导入成功！新增: ' + data.added + ', 重复: ' + data.duplicate + ', 错误: ' + data.error + ', 总计: ' + data.total);
+      document.getElementById('downloadBtn').style.display = 'none'; document.getElementById('importBtn').style.display = 'none';
+      document.getElementById('convertResultBox').style.display = 'none'; document.getElementById('convertResult').textContent = ''; conversionResult = '';
+    } catch (err) { showStatus('导入失败: ' + err.message, 'error'); }
+    finally { importBtn.disabled = false; importBtn.textContent = '导入题库'; }
+  }
+
+  async function directImport() {
+    if (currentEnv === 'production') { alert('生产模式不能导入题库！'); return; }
+    const fileInput = document.getElementById('fileInput'); const encodingSelect = document.getElementById('encodingSelect');
+    const actionBtn = document.getElementById('actionBtn');
+    if (!fileInput.files || fileInput.files.length === 0) { showStatus('请选择要导入的文件', 'error'); return; }
+    actionBtn.disabled = true; actionBtn.textContent = '导入中...';
+    try {
+      const file = fileInput.files[0]; let content = await readFileAsText(file, encodingSelect.value);
+      const res = await fetch(API_URL + '/api/question-bank/import-file', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileContent: content, source: '职教考试' })
+      });
+      const data = await res.json(); if (!res.ok || !data.success) throw new Error(data.error || '导入失败');
+      showStatus('导入成功！新增: ' + data.added + ', 重复: ' + data.duplicate, 'success'); fileInput.value = '';
+    } catch (err) { showStatus('导入失败: ' + err.message, 'error'); }
+    finally { actionBtn.disabled = false; actionBtn.textContent = '⚡ 直接导入'; }
+  }
+
+  // ---- Threshold & Env Logic ----
+  function clampThreshold(value) { const num = Number.parseFloat(value); if (!Number.isFinite(num)) return 0.35; return Math.max(0, Math.min(1, Number(num.toFixed(2)))); }
+  function syncThresholdFromRange() { document.getElementById('thresholdInput').value = document.getElementById('thresholdRange').value; }
+  function syncThresholdFromInput() { const v = clampThreshold(document.getElementById('thresholdInput').value); document.getElementById('thresholdInput').value = v.toFixed(2); document.getElementById('thresholdRange').value = v.toFixed(2); }
+  function syncThresholdFromRange2() { document.getElementById('thresholdInput2').value = document.getElementById('thresholdRange2').value; }
+  function syncThresholdFromInput2() { const v = clampThreshold(document.getElementById('thresholdInput2').value); document.getElementById('thresholdInput2').value = v.toFixed(2); document.getElementById('thresholdRange2').value = v.toFixed(2); }
+  function setThresholdUI(value) { const safe = clampThreshold(value); document.getElementById('thresholdRange').value = safe.toFixed(2); document.getElementById('thresholdInput').value = safe.toFixed(2); document.getElementById('thresholdRange2').value = safe.toFixed(2); document.getElementById('thresholdInput2').value = safe.toFixed(2); }
+  
+  async function loadThreshold() {
+    syncEnvUI();
+    try { const res = await fetch(API_URL + '/api/matching-config'); const data = await res.json(); if (typeof data.threshold === 'number') setThresholdUI(data.threshold); } catch (err) {}
+  }
+  
+  async function saveThreshold() {
+    const btn = document.getElementById('saveThresholdBtn'); const value = clampThreshold(document.getElementById('thresholdInput').value);
+    setThresholdUI(value); btn.disabled = true; btn.textContent = '保存中...';
+    try {
+      const res = await fetch(API_URL + '/api/matching-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ threshold: value }) });
+      const data = await res.json(); if (!res.ok || !data.success) throw new Error(data.error || '保存失败');
+      setThresholdUI(data.threshold); alert('匹配相似度已更新为 ' + Number(data.threshold).toFixed(2));
+    } catch (err) { alert('保存失败: ' + err.message); } finally { btn.disabled = false; btn.textContent = '保存'; }
+  }
+
+  async function saveThreshold2() {
+    const value = clampThreshold(document.getElementById('thresholdInput2').value);
+    document.getElementById('thresholdRange2').value = value.toFixed(2); document.getElementById('thresholdInput2').value = value.toFixed(2);
+    const selectedEnv = document.querySelector('input[name="env2"]:checked').value;
+    try {
+      const res1 = await fetch(API_URL + '/api/matching-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ threshold: value }) });
+      const data1 = await res1.json(); if (!res1.ok || !data1.success) throw new Error(data1.error || '保存失败');
+      const res2 = await fetch(API_URL + '/api/save-env', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ env: selectedEnv }) });
+      const data2 = await res2.json();
+      alert('配置已保存！\n相似度: ' + Number(data1.threshold).toFixed(2) + '\n环境: ' + selectedEnv + '\n请重启服务生效');
+    } catch (err) { alert('保存失败: ' + err.message); }
+  }
+
+  async function switchEnv2() {
+    currentEnv = document.querySelector('input[name="env2"]:checked').value; localStorage.setItem('env', currentEnv); API_URL = ENV_CONFIG[currentEnv]; syncEnvUI();
+    document.getElementById('envWarning').style.display = currentEnv === 'production' ? 'inline' : 'none';
+    try { const res = await fetch(API_URL + '/api/save-env', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ env: currentEnv }) }); const data = await res.json(); alert('已切换到' + (currentEnv === 'development' ? '开发' : '生产') + '环境\n' + data.message); }
+    catch (err) { alert('已切换到' + (currentEnv === 'development' ? '开发' : '生产') + '环境\n(保存失败，请手动重启)'); }
+  }
+
+  function syncEnvUI() { document.querySelectorAll('input[name="env2"]').forEach(r => r.checked = r.value === currentEnv); const warning = document.getElementById('envWarning'); if (warning) warning.style.display = currentEnv === 'production' ? 'inline' : 'none'; }
+
+  async function sendData() {
+    const htmlContent = document.getElementById('htmlInput').value.trim(); const sendBtn = document.getElementById('sendBtn'); const responseBox = document.getElementById('responseBox');
+    if (!htmlContent) { alert('请输入网页源码'); return; }
+    sendBtn.disabled = true; sendBtn.textContent = '解析中...'; responseBox.style.display = 'none';
+    try {
+      const res = await fetch(API_URL + '/api/parse-and-get-answer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlContent }) });
+      const text = await res.text(); document.getElementById('responseData').textContent = text; responseBox.style.display = 'block';
+    } catch (err) { document.getElementById('responseData').textContent = '请求失败: ' + err.message; responseBox.style.display = 'block'; }
+    finally { sendBtn.disabled = false; sendBtn.textContent = '发送解析'; }
+  }
+
+  // Init
+  checkLogin();
+</script>
+</body>
+</html>

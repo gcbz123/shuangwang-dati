@@ -1,0 +1,20 @@
+{
+  "name": "Generic System",
+  "description": "通用考试系统配置，适用于大多数简单网页",
+  "questionContainer": [
+    ".question",
+    ".question-item",
+    "[class*='question']",
+    ".ti"
+  ],
+  "optionLabels": "label input[type='radio'], label input[type='checkbox'], .option",
+  "nextButton": [
+    "button:contains('下一题')",
+    "button:contains('Next')",
+    ".next-button",
+    ".btn-next",
+    "a:contains('下一题')"
+  ],
+  "submitButton": "button:contains('提交'), .submit-button, #submit",
+  "textarea": "textarea, input[type='text']"
+}

@@ -1,0 +1,709 @@
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>网络考试</title>
+    <script language="javascript" type="text/javascript">
+        //        function document.oncontextmenu() { event.returnValue = false; } //屏蔽鼠标右键   
+        //        function window.onhelp() { return false; }
+        //        function document.onkeydown() {
+        //            if ((event.keyCode == 8) ||                                      //屏蔽   退格键   
+        //              (event.keyCode == 112) ||                                     //屏蔽   F1    
+        //              (event.keyCode == 113) ||                                     //屏蔽   F2     
+        //              (event.keyCode == 114) ||                                     //屏蔽   F3     
+        //              (event.keyCode == 116) ||                                     //屏蔽   F5    
+        //              (event.keyCode == 122) ||                                     //屏蔽   F11
+        //              (event.ctrlKey && event.keyCode == 82)) {   //Ctrl   +   R   
+        //                event.keyCode = 0;
+        //                event.returnValue = false;
+        //            }
+        //            if ((window.event.altKey) &&
+        //              ((window.event.keyCode == 37) ||       //屏蔽   Alt+   方向键   ←   
+        //                (window.event.keyCode == 39))) {     //屏蔽   Alt+   方向键   →    
+        //                event.returnValue = false;
+        //            }
+        //            if (event.ctrlKey && ((event.keyCode < 16) ||
+        //         (event.keyCode > 16 && event.keyCode < 32) ||
+        //         (event.keyCode > 32)
+        //         )) event.returnValue = false;       //屏蔽   Ctrl+w   
+        //            if (event.shiftKey && event.keyCode == 121) event.returnValue = false;     //屏蔽   shift+F10   
+        //            if (window.event.srcElement.tagName == "A" && window.event.shiftKey)
+        //                window.event.returnValue = false;                           //屏蔽   shift   加鼠标左键新开一网页
+        //        }
+        //        function click(e) {
+        //            if (document.all) {
+        //                if (event.button == 2 || event.button == 3) {
+        //                    oncontextmenu = 'return false';
+        //                }
+        //            }
+        //        }
+        //        function showtime() {
+        //            var now = new Date();
+        //            years = now.getFullYear();
+        //            month = now.getMonth() + 1;
+        //            dates = now.getDate();
+        //            hours = now.getHours();
+        //            Minutes = now.getMinutes();
+        //            Seconds = now.getSeconds();
+        //            if (hours < 10)
+        //                hours = "0" + hours;
+        //            if (Minutes < 10)
+        //                Minutes = "0" + Minutes;
+        //            if (Seconds < 10)
+        //                Seconds = "0" + Seconds;
+        //            var titletext = "当前日期时间为>>>" + years + "年" + month + "月" + dates + "日" + hours + ":" + Minutes + ":" + Seconds;
+        //            setTimeout("showtime()", 1000);
+        //            document.title = titletext;
+        //        }
+        //        document.onmousedown = click;
+        //        document.oncontextmenu = new Function("return false;") 
+
+    </script>
+    <link href="../CSS/Examstyle.css" rel="stylesheet" type="text/css">
+    <style type="text/css">
+        body
+        {
+            background-color: #F5EFBA;
+            margin: 0;
+            height: 100%;
+            width: 100%;
+            vertical-align: top;
+            text-align: center;
+            float: left;
+        }
+        .divhead
+        {
+            position: relative;
+            width: 98%;
+            font-family: 隶书;
+            font-size: 2em;
+            text-align: center;
+            vertical-align: middle;
+            word-break: break-all;
+        }
+        .grxxc
+        {
+            width: 160px;
+            text-align: left;
+            vertical-align: middle;
+            float: left;
+            position: fixed;
+            color: #990000;
+            background-color: #F6ED9E;
+            font-size: 1.5em;
+            word-break: break-all; /*margin:0px 10px 0px 0px; */
+            margin: 0px 10px 0px 0px;
+            padding: 10px 10px 10px 20px;
+            top: 50px;
+            left: 0px;
+        }
+        .divmain
+        {
+            background-color: #E1F4F3;
+          /*  background-color: #E1E1E8;*/
+            word-break: break-all;
+            margin-left: 200px;
+            text-align: left;
+        }
+    </style>
+    <script language="javascript" type="text/javascript">
+        //        function window.onbeforeunload() {
+        //            if (event.clientY < 0 && event.clientX > document.body.clientWidth - 20
+        //        || event.clientY < 0 && event.clientX < 20
+        //        || event.altKey
+        //        || event.clientY > document.body.clientHeight) {
+        //                event.returnValue = '是否不交卷退出考试页面？ 如果选择确定将不保存成绩。'
+        //            }
+        //        }
+        function hidebtn() {
+            document.getElementById("Button1").style.display = "none";
+            document.getElementById("BtnSubmit").disabled = true;
+        } 
+    </script>
+<style>
+        #exam-control-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 280px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 16px;
+            z-index: 999999;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: #fff;
+            font-size: 13px;
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+
+        #exam-control-panel:hover {
+            box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+        }
+
+        #exam-control-panel h3 {
+            margin: 0 0 12px 0;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #exam-control-panel .mode-selector {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 12px;
+        }
+
+        #exam-control-panel .mode-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 4px 0;
+        }
+
+        #exam-control-panel .mode-option input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        #exam-control-panel .button-group {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        #exam-control-panel button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        #exam-control-panel button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        #exam-control-panel button:active {
+            transform: translateY(0);
+        }
+
+        #exam-control-panel button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #exam-control-panel button.pause-btn {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        #exam-control-panel button.stop-btn {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+        }
+
+        #exam-control-panel .status-section {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        #exam-control-panel .status-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 6px 0;
+            font-size: 12px;
+        }
+
+        #exam-control-panel .status-value {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        #exam-control-panel .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        #exam-control-panel .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            border-radius: 3px;
+        }
+
+        #exam-control-panel .close-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: none;
+            border: none;
+            color: rgba(255,255,255,0.6);
+            font-size: 18px;
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        #exam-control-panel .close-btn:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+
+        /* 就绪提示 */
+        #exam-ready-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            color: #fff;
+            padding: 20px 40px;
+            border-radius: 30px;
+            font-size: 20px;
+            font-weight: 400;
+            z-index: 999999;
+            letter-spacing: 2px;
+            display: none;
+            animation: fadeInOut 2s ease-in-out;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+        }
+
+        /* 进度条 */
+        #exam-progress {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            color: #fff;
+            padding: 10px 24px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 400;
+            z-index: 999999;
+            display: none;
+        }
+
+        /* 键盘快捷键提示 */
+        #keyboard-hints {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            color: rgba(255,255,255,0.8);
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 11px;
+            z-index: 999998;
+            display: none;
+        }
+
+        #keyboard-hints .key {
+            background: rgba(255,255,255,0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin: 0 3px;
+            font-weight: 500;
+        }
+    </style></head>
+
+<body style="font-size:15px;">
+    <script type="text/javascript">
+        //        window.onunload = e;
+        //        function e() {
+        ////            closes.Click();
+        //            return;
+        //            window.close();
+        //        }
+    </script>
+    <form method="post" action="kssj3.aspx?type=B&amp;lx=K&amp;m=0&amp;k=B28143BK&amp;r=2071094157&amp;d=99990002000700061870&amp;i=10.104.240.163&amp;xm=%u8c22%u6656" id="form1" style="text-align: center;">
+<div class="aspNetHidden">
+
+
+
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+var theForm = document.forms['form1'];
+if (!theForm) {
+    theForm = document.form1;
+}
+function __doPostBack(eventTarget, eventArgument) {
+    if (!theForm.onsubmit || (theForm.onsubmit() != false)) {
+        theForm.__EVENTTARGET.value = eventTarget;
+        theForm.__EVENTARGUMENT.value = eventArgument;
+        theForm.submit();
+    }
+}
+//]]>
+</script>
+
+
+<script src="/WebResource.axd?d=L64IeIPmKa-VSH3D1lqzdaZMG-Zobnnm2XMTdKTNhOC7eQeu1-CW_h2jEKfl3sj9wQVshbG0Fno2UgYmrfpSOKbDNllk_824vgHI2F-itfw1&amp;t=634773918900000000" type="text/javascript"></script>
+
+
+<script src="/ScriptResource.axd?d=R3dBpZZNRcLbKc9ByMWWPBs5PIQqLVcE7oipFMQ3PBe1FO0yZ1yQCIl4l9IflJbSEDjry0phDCNyRi2hV2xfWqbGoNEfVjHTOiC3Ap2Ya9iBuw1GPMwLJ-SYxYHoy5xGmw7CmuvXuACf43GdK0qqGVUUYAb93TENV3ngz-DZzNMUDU69SPTETl5L1SCNlXGt0&amp;t=6119e399" type="text/javascript"></script>
+<script type="text/javascript">
+//<![CDATA[
+if (typeof(Sys) === 'undefined') throw new Error('ASP.NET Ajax client-side framework failed to load.');
+//]]>
+</script>
+
+<script src="/ScriptResource.axd?d=nCKzxHjWz4cjnGnMKE6caR1PhdA9itBsHc3KNAV0SU-OpEDCvA6OBLHVuaF69uxhcVmzs2T4SvTfNcY8ZdWz_KtPtvMix4PzoHdh696EJq6CezUkzy-0sRjtmP5FGq5xqm8deQzgGAFThCJuAUojuDTQomx7EBftgmYW0AECY37wKNt9VvB1d8SsknNoGYYP0&amp;t=6119e399" type="text/javascript"></script>
+<div class="aspNetHidden">
+
+	
+</div>
+    <script type="text/javascript">
+//<![CDATA[
+Sys.WebForms.PageRequestManager._initialize('ScriptManager1', 'form1', ['tUpdatePanel1','UpdatePanel1'], [], [], 90, '');
+//]]>
+</script>
+
+    
+    <script language="javascript" type="text/javascript">
+
+        var sec = 0;
+        var min = 0;
+        var hou = 0;
+        flag = 0;
+        var idt = setInterval('ls()', 1000);
+        var idtks = setInterval('kssmshow()', 1000);
+        function kssmshow() {
+            var djs = document.getElementById("djs")
+            if (djs.innerHTML == 0) {
+                window.clearInterval(idtks);
+                document.getElementById("kssmdiv").style.display = "none";
+                document.getElementById("pgdiv").style.display = "";
+                sec = 0;
+                document.getElementById("Label3").innerText = document.getElementById("hiddenyksj").defaultValue + "分0秒";
+                min = parseInt(document.getElementById("hiddenyksj").defaultValue);
+            }
+            else {
+                document.getElementById("djs").innerHTML = document.getElementById("djs").innerHTML - 1;
+            }
+        }
+        //        window.setTimeout(kssmshow, 10000);
+
+        function ls() {
+            sec++;
+            if (sec == 60) { sec = 0; min += 1; }
+            if (min >= document.getElementById("lblKstime").innerText) {
+                window.clearInterval(idt);
+                alert("考试时间已到，系统将自动交卷！");
+                document.getElementById("Button1").click();
+            }
+            else {
+                if (min > 3|| document.getElementById("lblKstime").innerText < 4) {
+                    document.getElementById("BtnSubmit").disabled = false;
+                    document.getElementById("BtnSubmit").style.display = "";
+                }
+                document.getElementById("Label3").innerText = min + "分" + sec + "秒";
+                document.getElementById("hiddenyksj").innerText = min;
+            }
+        }
+        //        idt = window.setTimeout("ls();", 1000);
+        //        function ls() {
+        //            sec++;
+        //            if (sec == 60) { sec = 0; min += 1; }
+        //            if (min >= document.getElementById("lblKstime").innerText) {
+        //                window.clearTimeout(idt);
+        //                alert("考试时间已到，系统将自动交卷！");
+        //                document.getElementById("Button1").click();
+
+        //            }
+        //            else {
+        //                if (min > 14 || document.getElementById("lblKstime").innerText < 15) {
+        //                    document.getElementById("BtnSubmit").disabled = false;
+        //                    document.getElementById("BtnSubmit").style.display = "";
+        //                }
+        //                document.getElementById("Label3").innerText = min + "分" + sec + "秒";
+        //                idt = window.setTimeout("ls();", 1000);
+        //            }
+        //        }
+        function setpanelbc(pe) {
+//            var xx = document.getElementsByName(pe.id.slice(2));
+            var xx = document.getElementById(pe.id.slice(2));
+            var xz = false;
+            for (var i = 0; i < xx.length; i++) {
+                if (xx[i].checked) {
+                    xz = true;
+                    break;
+                }
+            }
+            if (xz) {
+                document.getElementById(pe.id).style.backgroundColor = "#CBCAE8";
+            }
+            else {
+                try {
+                    var xzm = xx.getElementsByTagName('input');
+                    for (var i = 0; i < xzm.length; i++) {
+                        if (xzm[i].checked) {
+                            xz = true;
+                            break;
+                        }
+                    }
+                    if (xz) {
+                        document.getElementById(pe.id).style.backgroundColor = "#CBCAE8";
+                    }
+                    else {
+                        document.getElementById(pe.id).style.backgroundColor = "#F2FADC";
+                    }
+                } catch (e) {
+
+                }
+            }
+        }
+
+    </script>
+    <div id="kssmdiv" style="width: 100%; height: 77px; clear: both; display: none;">
+        <div style="width: 10%; float: left;">
+            &nbsp;&nbsp;&nbsp;&nbsp;</div>
+        <div style="width: 79%; float: left;">
+            <p style="font-size: x-large; font-weight: bold; text-align: center;">
+                考试须知</p>
+            <p style="font-size: large; text-align: left;">
+                1．考生必须在人事部门的安排下，在指定的机器上考试，考试过程中发生异常情况时，向监考人员报告，由监考人员联系处理。<br>
+                2．试卷仅生成一次（不论考与否），考卷一经生成，应即刻答题，计时器开始计时，同时显示考试起止时间，到达结束时间系统自动交卷。<br>
+                3. 本季度开始实行一场考试可以考多门课程，请务必确认考试课程是否正确，所有课程全部答完后再交卷。 <br>
+                4．考生交卷后看到成绩才算提交成功，如未看到考试成绩请与考场监考人员联系。<br>
+                5．在线考试不合格，在有效期内可继续学习，并可申请补考。<br>
+                6．在线考试成绩合格自动记录继续教育考核系统，登记个人学习电子档案。<br>
+            </p><p align="center" style="font-size: x-large; font-weight: bold;">
+                武汉铁路局远程教育网络考试考场规则</p>
+            <p style="font-size: large; text-align: left;">
+                第一条考生在本科目考试开始前10分钟凭本人有效证件（工作证或身份证），经监考人员核对考场姓名、身份证和工作证号码是否正确，确认无误后考生方可 进入考场；将身份证或工作证放置在课桌右上角，以便核查。考试开始10分钟后，考生不得进入考场参加考试。考试开始后20分钟内，考生不得交卷退场。<br>
+                第二条考生进入考场时，不得将所携带的与考试无关的任何物品带入座位，应主动放在考场指定的存放物品处。否则，视为作弊，试卷按零分处理。<br>
+                第三条考试过程中，出现机器故障或网络故障、发现试题错误，考生应举手请考场监考老师解决，不得自行处置和要求监考人员解释试题，否则按违纪处理。<br>
+                第四条考生在考试中途一般不得离开考场，如确有需要暂时离开考场必须经监考人员同意并由指定的监考人员陪同。<br>
+                第五条考生在考试中应当严格遵守考场纪律，保持考场肃静，服从监考人员管理。不得相互交谈，不得协助他人答题，不得在考场内吸烟、随意站立走动。<br>
+                第六条考试过程中，不得交头接耳，不得使用通讯工具等电子设备、不得抄录屏幕内容、不得使用自带软盘、优盘等存储设备，否则按作弊处理；<br>
+                第七条考生答题完毕可手动按交卷按钮或时间到由计算机收卷，交卷后不可撤回，考生必须立即离开考场，并不得在考场附近逗留、谈论。<br>
+                第八条考生应当尊重考场工作人员，自觉接受监考人员的监督和检查。<br>
+                第九条考生和证件不符的按作弊处理，替考的责令离开考场，假证件予以没收，按违纪处理。 考试作弊人员取消本次考试成绩，2年内禁止再次参加考试。考生在考试期间违规、违纪的，按照有关规定进行处理。<br>
+                第十条除考点主考、本考场监考、流动监考及巡视人员外，其他人员不得进入考场。<br>
+                第十一条各考点和工作人员应认真负责，严格遵守考试工作纪律，有关人员发生违纪的，由所在单位给予行政或纪律处分；对考点给予停考整顿、撤销处理。</p>
+            <p style="font-size: x-large">
+                开始考试倒计时：<label id="djs">0</label>
+            </p>
+        </div>
+    </div>
+    <div id="pgdiv" style="width: 100%; text-align: center;">
+        <div class="divhead">
+        </div>
+        <div class="grxxc">
+            <span id="Labelk1" style="font-size:Small;font-weight:bold;">《集团公司党委关于做好2026年运输安全工作的通知》（武铁党办〔2026〕1号）、重大事故隐患判定标准学习</span><br>
+            <span id="Labelk2" style="font-size:Small;font-weight:bold;"></span><br>
+            <span id="Labelk3" style="font-size:Small;font-weight:bold;"></span><br>
+            <br>
+            <span id="Label4">谢晖</span><br>
+            <span id="lbldw">十堰车务段</span><br>
+            
+            <span id="lblwid">2076144008907</span><br>
+            <br>
+            考试时间：<br>
+            <span id="lblKstime">30</span>分钟<br>
+            计时：<br>
+            <span id="Label3">4分58秒</span><br>
+            <br>
+            <input type="submit" name="BtnSubmit" value="交 卷" id="BtnSubmit" class="aspNetDisabled" style="color:#993333;background-color:#FFCC99;height:24px;width:50px;margin-left: 0px">
+            <div style="visibility: hidden;">
+                <input type="submit" name="Button1" value="" id="Button1"></div>
+            
+            
+            
+            <input type="hidden" name="hiddenyksj" id="hiddenyksj" value="0"> 
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+        </div>
+        <div class="divmain">
+            <br>
+            <div id="UpdatePanel1">
+                    <div style="background-color:#F7F6E4;">
+	<span style="color:#B8403F;"><br>三、判断题（每题1分）<br><br></span>
+</div><div id="pt64390168" onclick="setpanelbc(this)" style="background-color:#F2FADC;">
+	<span style="color:#006B8F;font-size:11pt;">1. 统筹开展关键信息基础设施安全保护工作，压实网络安全主体责任，开展网络安全等级保护测评、关键信息基础设施风险评估、商用密码应用安全性评估和数据安全风险评估，提升网络安全管理、技术防护、安全运营等方面综合能力，不得违法关闭直接关系生产安全的监控监测设备。（出自《中国铁路武汉局集团有限公司党委关于做好2026年运输安全工作的通知》）<br></span><table id="64390168" style="color:#0E4511;">
+		<tbody><tr>
+			<td><span style="font-size:14px"><input id="64390168_0" type="radio" name="64390168" value="T"><label for="64390168_0">A．对</label></span></td>
+		</tr><tr>
+			<td><span style="font-size:14px"><input id="64390168_1" type="radio" name="64390168" value="F"><label for="64390168_1">B．错</label></span></td>
+		</tr>
+	</tbody></table>
+</div><div id="pt64390169" onclick="setpanelbc(this)" style="background-color:#F2FADC;">
+	<span style="color:#006B8F;font-size:11pt;">2. 铁路建设工程生产安全重大事故隐患是指在铁路建设工程施工过程中，存在的危害程度较大、可能导致群死群伤或造成特别重大经济损失的生产安全事故隐患。（出自《铁路建设工程生产安全重大事故隐患判定标准》）<br></span><table id="64390169" style="color:#0E4511;">
+		<tbody><tr>
+			<td><span style="font-size:14px"><input id="64390169_0" type="radio" name="64390169" value="T"><label for="64390169_0">A．对</label></span></td>
+		</tr><tr>
+			<td><span style="font-size:14px"><input id="64390169_1" type="radio" name="64390169" value="F"><label for="64390169_1">B．错</label></span></td>
+		</tr>
+	</tbody></table>
+</div><div id="pt64390170" onclick="setpanelbc(this)" style="background-color:#F2FADC;">
+	<span style="color:#006B8F;font-size:11pt;">3. 市级以上地方市场监督管理部门负责本行政区域内的 特种设备安全监督检查工作，根据上级市场监督管理部门部 署或者实际工作需要，组织开展监督检查。（出自重大事故隐患判定标准汇编）<br></span><table id="64390170" style="color:#0E4511;">
+		<tbody><tr>
+			<td><span style="font-size:14px"><input id="64390170_0" type="radio" name="64390170" value="T"><label for="64390170_0">A．对</label></span></td>
+		</tr><tr>
+			<td><span style="font-size:14px"><input id="64390170_1" type="radio" name="64390170" value="F"><label for="64390170_1">B．错</label></span></td>
+		</tr>
+	</tbody></table>
+</div><div id="pt64390171" onclick="setpanelbc(this)" style="background-color:#F2FADC;">
+	<span style="color:#006B8F;font-size:11pt;">4. 及时对照修订专业安全管理细则，以服务支撑现场为核心，推动专业管理贯通基层一线，充分发挥安监部门在维护规章严肃性、维修体制改革、技术装备创新、解决一线难题等方面的主导、实施、验证等作用。（出自《中国铁路武汉局集团有限公司党委关于做好2026年运输安全工作的通知》）<br></span><table id="64390171" style="color:#0E4511;">
+		<tbody><tr>
+			<td><span style="font-size:14px"><input id="64390171_0" type="radio" name="64390171" value="T"><label for="64390171_0">A．对</label></span></td>
+		</tr><tr>
+			<td><span style="font-size:14px"><input id="64390171_1" type="radio" name="64390171" value="F"><label for="64390171_1">B．错</label></span></td>
+		</tr>
+	</tbody></table>
+</div><div id="pt64390172" onclick="setpanelbc(this)" style="background-color:#F2FADC;">
+	<span style="color:#006B8F;font-size:11pt;">5. 安全管理重大事故隐患是指未落实有关法律法规基本要求，未建立或者未落实安全基础管理制度的隐患。（铁路交通重大事故隐患判定标准（试行））<br></span><table id="64390172" style="color:#0E4511;">
+		<tbody><tr>
+			<td><span style="font-size:14px"><input id="64390172_0" type="radio" name="64390172" value="T"><label for="64390172_0">A．对</label></span></td>
+		</tr><tr>
+			<td><span style="font-size:14px"><input id="64390172_1" type="radio" name="64390172" value="F"><label for="64390172_1">B．错</label></span></td>
+		</tr>
+	</tbody></table>
+</div><div id="pt64390173" onclick="setpanelbc(this)" style="background-color:#F2FADC;">
+	<span style="color:#006B8F;font-size:11pt;">6. 强化专业管理能力建设。按照“谁主管谁牵头、谁为主谁牵头、谁靠近谁牵头＂原则，以专业“六管＂为带动，压实专业管理责任。（出自《中国铁路武汉局集团有限公司党委关于做好2026年运输安全工作的通知》）<br></span><table id="64390173" style="color:#0E4511;">
+		<tbody><tr>
+			<td><span style="font-size:14px"><input id="64390173_0" type="radio" name="64390173" value="T"><label for="64390173_0">A．对</label></span></td>
+		</tr><tr>
+			<td><span style="font-size:14px"><input id="64390173_1" type="radio" name="64390173" value="F"><label for="64390173_1">B．错</label></span></td>
+		</tr>
+	</tbody></table>
+</div><div id="pt64390174" onclick="setpanelbc(this)" style="background-color:#F2FADC;">
+	<span style="color:#006B8F;font-size:11pt;">7. 国家市场监督管理总局负责监督指导全国特种设备安全监督检查工作，可以根据需要组织开展监督检查。（出自重大事故隐患判定标准汇编）<br></span><table id="64390174" style="color:#0E4511;">
+		<tbody><tr>
+			<td><span style="font-size:14px"><input id="64390174_0" type="radio" name="64390174" value="T"><label for="64390174_0">A．对</label></span></td>
+		</tr><tr>
+			<td><span style="font-size:14px"><input id="64390174_1" type="radio" name="64390174" value="F"><label for="64390174_1">B．错</label></span></td>
+		</tr>
+	</tbody></table>
+</div><div id="pt64390175" onclick="setpanelbc(this)" style="background-color:#F2FADC;">
+	<span style="color:#006B8F;font-size:11pt;">8. 加快现代化铁路安全保障体系建设，年底前各专业部门要全面梳理公布一批安全保障措施清单，对成熟有效的措施及时纳入规章标准。（出自《中国铁路武汉局集团有限公司党委关于做好2026年运输安全工作的通知》）<br></span><table id="64390175" style="color:#0E4511;">
+		<tbody><tr>
+			<td><span style="font-size:14px"><input id="64390175_0" type="radio" name="64390175" value="T"><label for="64390175_0">A．对</label></span></td>
+		</tr><tr>
+			<td><span style="font-size:14px"><input id="64390175_1" type="radio" name="64390175" value="F"><label for="64390175_1">B．错</label></span></td>
+		</tr>
+	</tbody></table>
+</div><div id="pt64390176" onclick="setpanelbc(this)" style="background-color:#F2FADC;">
+	<span style="color:#006B8F;font-size:11pt;">9. 铁路主要行车设备设施重大事故隐患是指铁路主要行车设备设施在勘察、设计、施工、监理、制造、监造、养护、维修等环节失管失控，极易直接导致列车脱轨、冲突、相撞、火灾、爆炸重大及以上事故或者人员群死群伤事故的隐患。（铁路交通重大事故隐患判定标准（试行））<br></span><table id="64390176" style="color:#0E4511;">
+		<tbody><tr>
+			<td><span style="font-size:14px"><input id="64390176_0" type="radio" name="64390176" value="T"><label for="64390176_0">A．对</label></span></td>
+		</tr><tr>
+			<td><span style="font-size:14px"><input id="64390176_1" type="radio" name="64390176" value="F"><label for="64390176_1">B．错</label></span></td>
+		</tr>
+	</tbody></table>
+</div><div id="pt64390177" onclick="setpanelbc(this)" style="background-color:#F2FADC;">
+	<span style="color:#006B8F;font-size:11pt;">10. 重大火灾隐患是指违反消防法律法规、不符合消防技术标准，可能导致火灾发生或火灾危害增大，并由此可能造成较大、重大火灾事故或严重社会影响的各类潜在不安全因素。（出自重大事故隐患判定标准汇编）<br></span><table id="64390177" style="color:#0E4511;">
+		<tbody><tr>
+			<td><span style="font-size:14px"><input id="64390177_0" type="radio" name="64390177" value="T"><label for="64390177_0">A．对</label></span></td>
+		</tr><tr>
+			<td><span style="font-size:14px"><input id="64390177_1" type="radio" name="64390177" value="F"><label for="64390177_1">B．错</label></span></td>
+		</tr>
+	</tbody></table>
+</div>
+                    <br>
+                    <div style="background-color:#E1F4F3;">
+	<a id="0" type="button" href="javascript:__doPostBack('0','')" style="display:inline-block;color:#852734;background-color:#B3F9F0;font-size:12pt;width:40px;text-align: center;">1</a><span id="Lblgf0" style="display:inline-block;width:10px;">　</span><a id="1" type="button" href="javascript:__doPostBack('1','')" style="display:inline-block;color:#852734;background-color:#B3F9F0;font-size:12pt;width:40px;text-align: center;">2</a><span id="Lblgf1" style="display:inline-block;width:10px;">　</span><a id="2" type="button" href="javascript:__doPostBack('2','')" style="display:inline-block;color:#852734;background-color:#B3F9F0;font-size:12pt;width:40px;text-align: center;">3</a><span id="Lblgf2" style="display:inline-block;width:10px;">　</span><a id="3" type="button" href="javascript:__doPostBack('3','')" style="display:inline-block;color:#852734;background-color:#B3F9F0;font-size:12pt;width:40px;text-align: center;">4</a><span id="Lblgf3" style="display:inline-block;width:10px;">　</span><a id="4" type="button" href="javascript:__doPostBack('4','')" style="display:inline-block;color:#852734;background-color:#B3F9F0;font-size:12pt;width:40px;text-align: center;">5</a><span id="Lblgf4" style="display:inline-block;width:10px;">　</span><a id="5" type="button" href="javascript:__doPostBack('5','')" style="display:inline-block;color:#FF5714;background-color:#B3F9F0;font-size:12pt;width:40px;text-align: center;text-decoration:none;">6</a><span id="Lblgf5" style="display:inline-block;width:10px;">　</span><a id="6" type="button" href="javascript:__doPostBack('6','')" style="display:inline-block;color:#852734;font-size:12pt;width:40px;text-align: center;">7</a><span id="Lblgf6" style="display:inline-block;width:10px;">　</span><a id="7" type="button" href="javascript:__doPostBack('7','')" style="display:inline-block;color:#852734;font-size:12pt;width:40px;text-align: center;">8</a><span id="Lblgf7" style="display:inline-block;width:10px;">　</span><br>
+</div><br>
+                </div>
+        </div>
+    </div>
+    <span style="display: none !important;"><input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value=""></span><span style="display: none !important;"><input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value=""></span><span style="display: none !important;"><input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="/wEPDwUJNjg0NjUzOTk1D2QWAgIBD2QWGAIBDw8WAh4EVGV4dAWNAeOAiumbhuWbouWFrOWPuOWFmuWnlOWFs+S6juWBmuWlvTIwMjblubTov5DovpPlronlhajlt6XkvZznmoTpgJrnn6XjgIvvvIjmrabpk4HlhZrlip7jgJQyMDI244CVMeWPt++8ieOAgemHjeWkp+S6i+aVhemakOaCo+WIpOWumuagh+WHhuWtpuS5oGRkAgQPDxYCHwAFBuiwouaZlmRkAgUPDxYCHwAFD+WNgeWgsOi9puWKoeautWRkAgYPDxYCHwAFDTIwNzYxNDQwMDg5MDdkZAIHDw8WAh8ABQIzMGRkAgsPDxYCHwAFATBkZAIMDw8WAh8ABQY5MjM4MTFkZAINDw8WAh8ABQExZGQCDw8PFgIfAAUBNmRkAhAPDxYCHwAFATFkZAIRDw8WAh8ABQE4ZGQCEw8PFgIfAAUBWWRkZA2+4eSbfkG0QOZlOSZuTKmj1dV++7cfgvJp0ww3looY"></span><span style="display: none !important;"><input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="/wEdACoYL0S2upEk2uac6Hwz/+EIJ3Kf/VisOdM9pKPSC0na/RqnyCv9x1H4MHPJoLsd3dWlTf1vGBPGr5f6OQQ8o8Gp+maxXh7EBpRNgJBCtgzkVTrcAyOeNYCoasLMP/N8UpyNTOi0PV0Bi3zketSJcaExQjBmheFwsCL9IdmSdBkIKOhlXOusFkdpS3oDHhGPWf1e6csaK8T1sMfg5pwqXpLAKCIhNBynmfRvXlxm/op5/mCXBMZTng3dywP4vFsOVa3A4NwYhExLmAH8dTOEkbWYKDv+Bl5BBdGt8dN5QioEgeVhT4YRBZCQmVCRVUODmIa2Drc83QhDuiujB5HMjT+ZstdIjLnk+JBYy4zyBsFAIHGKtVbdRjTY3Ev2N0pyL7Lnd6rt0QjJQuL97F8YJMzW8HHYMUWvisIDX2g/7Y8r5wGiFC3b4brjZ52nvr+6kNmMkPHEGnXp9gK2pAYJuAwx+7TXSY+6mcwoNwEPn2UPD6L8VYR9lUVmVeLmTRMJYlUrvJ0aLEwf2AxBLynnXmIFTdoTE7sktsFL6RUZ8LmSgWpi2dCDxLpb0/5UdX3Q2PiNBADdaodAQTe7zAUd4f+ApGsxLa7tKkzoXj0yzxONzQO37WLAJ6prXi1NUnZeNEScoqWcWqi5/RLu/trCMADolchopZp3mKMvGdPIl2RhGNFMOh/S9Gar9Z6LfpPcf/CK1Y9C0HdgSU5VGbF/zfE4pco3HQNyrwG4sNqdtKRwTHKDOdstBOk7mVppZb5mZoH5jw/e8ZSB+2OZY2wkJ+etGc94djsJk2ZFDueyErOYHuVAgmj0/63/ERiWpMQzvh7szNp1xh91HdjgSkSmA8AOzfg78Z8BXhXifTCAVkevdxjFSJaQlfaGq83cbjn1g/xJwsttw9tUX/6wLCMODYd6Q+JYXxtQVfefZN//T7Tx0w=="></span></form>
+
+
+<div id="exam-control-panel" style="display: block;">
+            <button class="close-btn" id="panel-close-btn">×</button>
+            <h3>🎓 智能考试助手</h3>
+
+            <div class="mode-selector">
+                <label class="mode-option">
+                    <input type="checkbox" id="auto-mode-checkbox">
+                    <span>自动模式 (Puppeteer)</span>
+                </label>
+            </div>
+
+            <div class="button-group">
+                <button id="start-btn">开始</button>
+                <button id="pause-btn" class="pause-btn" disabled="">暂停</button>
+                <button id="stop-btn" class="stop-btn" disabled="">停止</button>
+            </div>
+
+            <div class="status-section">
+                <div class="status-item">
+                    <span>状态:</span>
+                    <span id="status-value" class="status-value">connected</span>
+                </div>
+                <div class="status-item">
+                    <span>考试:</span>
+                    <span id="exam-type-value" class="status-value" style="color:#f0ad4e;">局网考试</span>
+                </div>
+                <div class="status-item">
+                    <span>进度:</span>
+                    <span id="progress-value" class="status-value">10/10</span>
+                </div>
+                <div class="status-item">
+                    <span>置信度:</span>
+                    <span id="confidence-value" class="status-value">-</span>
+                </div>
+                <div class="progress-bar">
+                    <div id="progress-fill" class="progress-fill" style="width: 100%;"></div>
+                </div>
+            </div>
+
+            <div style="font-size: 10px; opacity: 0.6; text-align: center;">
+                按 <span class="key">H</span> 查看快捷键
+            </div>
+        </div><div id="exam-ready-popup" style="display: none;">题库就绪</div><div id="exam-progress" style="display: none;"></div><div id="keyboard-hints">
+            <span class="key">-</span> 获取源码
+            <span class="key">+</span> 开始答题
+            <span class="key">*</span> 隐藏界面
+            <span class="key">/</span> 停止
+            <span class="key">D</span> 调试
+            <span class="key">H</span> 帮助
+        </div></body></html>

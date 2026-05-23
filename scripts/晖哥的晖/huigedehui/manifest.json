@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "智能考试助手(晖哥的晖)",
+  "version": "1.0",
+  "description": "支持局网考试/职教考试自动答题的浏览器扩展",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["http://localhost:3000/*", "http://*/*", "https://*/*"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
