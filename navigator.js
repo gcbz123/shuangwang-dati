@@ -67,13 +67,11 @@ class Navigator {
 
   /**
    * 转换jQuery风格的contains选择器
+   * 将 :contains("text") 转换为 driver 可处理的形式（保留原选择器，由 driver 层处理）
    */
   convertJQuerySelector(selector) {
-    // :contains()是jQuery特有，需要特殊处理
-    if (selector.includes(':contains(')) {
-      // 返回null表示需要特殊处理，跳过此选择器
-      return null;
-    }
+    // :contains() 选择器保留原样，由各 driver 实现负责处理
+    // PuppeteerDriver 已支持通过 JS evaluate 查找含文本的元素
     return selector;
   }
 

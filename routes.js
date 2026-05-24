@@ -6,7 +6,7 @@ const path = require('path');
 const iconv = require('iconv-lite');
 const config = require('./config');
 const logger = require('./logger');
-const { rateLimitMiddleware } = require('./middleware');
+const { rateLimitMiddleware, adminAuthMiddleware, ADMIN_TOKEN } = require('./middleware');
 const { extractQuestions } = require('./htmlParser');
 const {
   getQuestionBank,
@@ -30,12 +30,14 @@ const { cleanText } = require('./textUtils');
 
 const router = express.Router();
 
-// ── 健康检查（生产环境隐藏内存详情） ──
+// ── 健康检查（生产环境隐藏内存详情，减少日志输出） ──
 router.get('/health', (_req, res) => {
   const questionCount = getQuestionBank().length;
   const uptime = process.uptime();
   
-  logger.info(`Health check: 题库${questionCount}题, 运行${Math.floor(uptime)}秒`);
+  if (!config.isProduction) {
+    logger.debug(`Health check: 题库${questionCount}题, 运行${Math.floor(uptime)}秒`);
+  }
   
   const info = {
     status: 'ok',
@@ -52,7 +54,7 @@ router.get('/health', (_req, res) => {
 
 // ── 保存环境设置 ──
 const ENV_FILE = path.join(__dirname, 'env.conf');
-router.post('/save-env', (req, res) => {
+router.post('/save-env', adminAuthMiddleware, (req, res) => {
   const { env } = req.body;
   if (env !== 'development' && env !== 'production') {
     return res.json({ success: false, error: '无效的环境值' });
@@ -79,6 +81,15 @@ router.get('/get-env', (_req, res) => {
 // 限流应用到下方所有路由
 router.use(rateLimitMiddleware);
 
+// ── 管理员登录 ──
+router.post('/auth/login', (req, res) => {
+  const { password } = req.body || {};
+  if (password === ADMIN_TOKEN) {
+    return res.json({ success: true, token: ADMIN_TOKEN });
+  }
+  res.status(401).json({ success: false, error: '密码错误' });
+});
+
 // ── 读取 page 目录下的文件（自动检测编码） ──
 router.get('/read-page-file', async (req, res) => {
   const filename = req.query?.file;
@@ -86,8 +97,6 @@ router.get('/read-page-file', async (req, res) => {
     return res.status(400).json({ error: '无效的文件名' });
   }
 
-  const fs = require('fs');
-  const path = require('path');
   const filePath = path.join(__dirname, 'page', filename);
 
   try {
@@ -316,7 +325,7 @@ router.get('/matching-config', (_req, res) => {
   res.json({ threshold: getFuseThreshold() });
 });
 
-router.post('/matching-config', (req, res) => {
+router.post('/matching-config', adminAuthMiddleware, (req, res) => {
   const result = setFuseThreshold(req.body?.threshold);
   if (result === null) {
     return res.status(400).json({ error: 'threshold 必须是 0 到 1 的数字' });
@@ -326,7 +335,7 @@ router.post('/matching-config', (req, res) => {
 });
 
 // ── 新增单条题目 ──
-router.post('/question-bank', async (req, res) => {
+router.post('/question-bank', adminAuthMiddleware, async (req, res) => {
   try {
     const { question, answer, question_type } = req.body;
     if (!question || !answer) {
@@ -344,7 +353,7 @@ router.post('/question-bank', async (req, res) => {
 });
 
 // ── 批量导入题库（从转换结果文本） ──
-router.post('/question-bank/import', async (req, res) => {
+router.post('/question-bank/import', adminAuthMiddleware, async (req, res) => {
   try {
     const { content, source } = req.body;
     if (!content || typeof content !== 'string') {
@@ -407,7 +416,7 @@ router.post('/question-bank/import', async (req, res) => {
 });
 
 // ── 直接导入题库文件 ──
-router.post('/question-bank/import-file', async (req, res) => {
+router.post('/question-bank/import-file', adminAuthMiddleware, async (req, res) => {
   try {
     let content = '';
     const { source } = req.body;
@@ -480,6 +489,16 @@ router.get('/extracted-questions', (_req, res) => {
 });
 
 // ==================== 自动考试系统 API ====================
+// 所有考试和监控 API 需要管理员认证
+router.use('/start-exam', adminAuthMiddleware);
+router.use('/exam-status', adminAuthMiddleware);
+router.use('/pause-exam', adminAuthMiddleware);
+router.use('/resume-exam', adminAuthMiddleware);
+router.use('/abort-exam', adminAuthMiddleware);
+router.use('/exam-report', adminAuthMiddleware);
+router.use('/import-dom-config', adminAuthMiddleware);
+router.use('/monitor', adminAuthMiddleware);
+router.use('/reports', adminAuthMiddleware);
 
 const examOrchestrator = require('./examOrchestrator');
 const monitor = require('./monitor');
@@ -586,11 +605,9 @@ router.post('/import-dom-config', async (req, res) => {
       return res.status(400).json({ error: 'configName and config are required' });
     }
 
-    const fs = require('fs').promises;
-    const path = require('path');
     const configPath = path.join(__dirname, 'domConfigs', `${configName}.json`);
 
-    await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
+    await fs.promises.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
 
     logger.info(`[API] DOM config imported: ${configName}`);
     res.json({ success: true, message: `DOM config saved to ${configName}.json` });
@@ -717,8 +734,6 @@ router.get('/reports/:sessionId', async (req, res) => {
 router.get('/reports/:sessionId/:format', async (req, res) => {
   try {
     const { sessionId, format } = req.params;
-    const fs = require('fs');
-    const path = require('path');
     const reportsDir = path.join(__dirname, 'exam_reports');
 
     if (!['json', 'csv', 'html'].includes(format)) {

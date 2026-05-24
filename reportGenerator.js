@@ -75,8 +75,9 @@ class ReportGenerator {
         abnormalities
       },
       questions: session.answers.map(a => this.formatQuestionAnswer(a)),
-      errors: session.errorLog.map(e => this.formatError(e)),
-      screenshots: session.screenshots || []
+      errors: session.errorLog ? session.errorLog.map(e => this.formatError(e)) : [],
+      // 截图数据来自 MonitorSession（如有）
+      screenshots: []
     };
 
     return report;
@@ -216,9 +217,9 @@ class ReportGenerator {
       const optionCount = [q.option_a, q.option_b, q.option_c, q.option_d].filter(o => o && o.trim()).length;
       let type = 'unknown';
 
-      if (optionCount === 4) type = 'single_choice';
+      if (optionCount === 4) type = 'single';
       else if (optionCount === 2) type = 'judgment';
-      else if (optionCount > 0) type = 'multiple_choice';
+      else if (optionCount > 0) type = 'multiple';
       else type = 'short_answer';
 
       if (!typeMap[type]) typeMap[type] = { count: 0, indices: [] };
@@ -240,8 +241,8 @@ class ReportGenerator {
    */
   translateType(type) {
     const translations = {
-      single_choice: '单选题',
-      multiple_choice: '多选题',
+      single: '单选题',
+      multiple: '多选题',
       judgment: '判断题',
       short_answer: '简答题',
       unknown: '未知题型'

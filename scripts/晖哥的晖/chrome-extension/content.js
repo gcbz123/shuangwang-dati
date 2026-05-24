@@ -1,29 +1,21 @@
-// ==UserScript==
-// @name         晖哥的助手(支持局网和职教考试)
-// @namespace    http://tampermonkey.net/
-// @version      2.2
-// @description  支持自动/手动双模式的考试辅助脚本 - 方案A轻量级扩展
-// @author       Sisyphus
-// @match        http://*/*
-// @match        https://*/*
-// @run-at       document-idle
-// @grant        GM_registerMenuCommand
-// @grant        GM_addStyle
-// @grant        GM_xmlhttpRequest
-// @grant        GM_notification
-// @connect      localhost
-// ==/UserScript==
+// content.js - 晖哥的助手 Chrome 插件内容脚本
+// 核心逻辑源自 auto-answer-enhanced.user.js，保持功能一致
 
 (function() {
     'use strict';
 
+    // 防止重复注入
+    if (window.__huigeAssistantLoaded) return;
+    window.__huigeAssistantLoaded = true;
+
     // ========== 配置 ==========
     const CONFIG = {
         apiUrl: 'http://localhost:3500',
-        wsPort: 3501,  // WebSocket端口
+        wsPort: 3501,
         checkInterval: 500,
-        autoMode: false,  // 默认手动模式
-        autoNextPage: true  // 局网考试自动翻页，默认开
+        enabled: true,
+        autoMode: false,
+        autoNextPage: true
     };
 
     // ========== 状态管理 ==========
@@ -125,8 +117,6 @@
             cursor: pointer;
         }
 
-
-
         #exam-control-panel .status-section {
             background: rgba(255,255,255,0.06);
             border-radius: 5px;
@@ -184,6 +174,13 @@
         #exam-control-panel .close-btn:hover {
             background: rgba(255,255,255,0.15);
             color: white;
+        }
+
+        #exam-control-panel .key {
+            background: rgba(255,255,255,0.15);
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-size: 10px;
         }
 
         /* 就绪提示 */
@@ -279,22 +276,144 @@
         }
     }
 
+    // ========== 从 Chrome storage 加载配置 ==========
+    function loadConfig() {
+        try {
+            chrome.storage.local.get(['enabled', 'autoMode', 'autoNextPage', 'apiUrl', 'wsPort'], (result) => {
+                if (chrome.runtime.lastError) return;
+                if (result.enabled !== undefined) CONFIG.enabled = result.enabled;
+                if (result.autoMode !== undefined) CONFIG.autoMode = result.autoMode;
+                // autoNextPage：强制默认 true（局网考试默认自动翻页）
+                CONFIG.autoNextPage = result.autoNextPage !== undefined ? result.autoNextPage : true;
+                if (result.apiUrl) CONFIG.apiUrl = result.apiUrl;
+                if (result.wsPort) CONFIG.wsPort = result.wsPort;
+
+                console.log('[Config] 加载完成 enabled=' + CONFIG.enabled + ' autoMode=' + CONFIG.autoMode + ' autoNextPage=' + CONFIG.autoNextPage);
+
+                const autoModeEl = document.getElementById('auto-mode-checkbox');
+                const autoNextEl = document.getElementById('auto-nextpage-checkbox');
+                if (autoModeEl) autoModeEl.checked = CONFIG.autoMode;
+                if (autoNextEl) autoNextEl.checked = CONFIG.autoNextPage;
+            });
+        } catch (_) {
+            // 扩展上下文失效时静默使用默认配置
+        }
+    }
+
     // ========== 初始化 ==========
-    function init() {
-        GM_addStyle(STYLES);
+    async function init() {
+        // 注入样式（不受启用开关影响）
+        const style = document.createElement('style');
+        style.textContent = STYLES;
+        document.head.appendChild(style);
+
+        // 监听来自 popup 的消息（始终监听，确保能收到启用/禁用指令）
+        try { chrome.runtime.onMessage.addListener(handlePopupMessage); } catch (_) {}
+
+        // 读取启用状态
+        try {
+            const config = await new Promise(resolve => {
+                chrome.storage.local.get(['enabled'], resolve);
+            });
+            CONFIG.enabled = config.enabled !== false;
+        } catch (_) {}
+
+        if (!CONFIG.enabled) {
+            console.log('晖哥的助手 已关闭（可通过 popup 启用）');
+            return;
+        }
+
         createControlPanel();
         createReadyPopup();
         createProgressBar();
         createKeyboardHints();
         bindKeyboard();
         connectWebSocket();
-        
+
+        // 从 storage 加载其他配置
+        loadConfig();
+
         // 自动检测考试类型
         state.examType = detectExamType();
 
-        console.log('智能考试助手 v2.2 已就绪');
+        // 检测到局网考试后，注入 page-world.js 到页面主世界
+        if (state.examType === '局网考试') {
+            ensurePageWorldInjected().catch(e => console.warn('[Page] 初始化注入失败:', e.message));
+        }
+
+        console.log('晖哥的助手 v2.3 (Chrome 插件) 已就绪');
         console.log('快捷键: - 获取源码 | + 开始答题 | * 隐藏界面 | / 停止 | D 调试 | H 显示帮助');
-        console.log('翻页: 面板勾选"自动翻页"后，局网考试答题结束自动翻到下一页');
+    }
+
+    // 处理来自 popup.js 的消息
+    function handlePopupMessage(message, sender, sendResponse) {
+        switch (message.action) {
+            case 'fetchAndParse':
+                fetchAndParse();
+                sendResponse({ success: true });
+                break;
+            case 'startExam':
+                startExam();
+                sendResponse({ success: true });
+                break;
+            case 'stopExam':
+                stopExam();
+                sendResponse({ success: true });
+                break;
+            case 'togglePanel':
+                togglePanel();
+                sendResponse({ success: true });
+                break;
+            case 'debugPage':
+                debugPage();
+                sendResponse({ success: true });
+                break;
+            case 'getStatus':
+                sendResponse({
+                    success: true,
+                    status: {
+                        enabled: CONFIG.enabled,
+                        examType: state.examType,
+                        isRunning: state.isRunning,
+                        answeredCount: state.answeredCount,
+                        totalQuestions: state.totalQuestions,
+                        hasAnswers: !!(state.answers && state.answers.length > 0),
+                        answersCount: state.answers ? state.answers.length : 0
+                    }
+                });
+                break;
+            case 'updateConfig':
+                if (message.enabled !== undefined) {
+                    CONFIG.enabled = message.enabled;
+                    if (message.enabled) {
+                        if (!state.panel) {
+                            createControlPanel();
+                            createReadyPopup();
+                            createProgressBar();
+                            createKeyboardHints();
+                            bindKeyboard();
+                            connectWebSocket();
+                            loadConfig();
+                            state.examType = detectExamType();
+                            if (state.examType === '局网考试') {
+                                ensurePageWorldInjected().catch(function() {});
+                            }
+                        }
+                    } else {
+                        cleanupUI();
+                    }
+                }
+                if (message.autoMode !== undefined) CONFIG.autoMode = message.autoMode;
+                if (message.autoNextPage !== undefined) CONFIG.autoNextPage = message.autoNextPage;
+                // 同步到面板 checkbox
+                const autoModeEl = document.getElementById('auto-mode-checkbox');
+                const autoNextEl = document.getElementById('auto-nextpage-checkbox');
+                if (autoModeEl) autoModeEl.checked = CONFIG.autoMode;
+                if (autoNextEl) autoNextEl.checked = CONFIG.autoNextPage;
+                sendResponse({ success: true });
+                break;
+        }
+        return true;
     }
 
     // 创建控制面板
@@ -353,14 +472,17 @@
         };
         document.getElementById('auto-mode-checkbox').onchange = (e) => {
             CONFIG.autoMode = e.target.checked;
+            try { chrome.storage.local.set({ autoMode: CONFIG.autoMode }); } catch (_) {}
         };
         document.getElementById('auto-nextpage-checkbox').onchange = (e) => {
             CONFIG.autoNextPage = e.target.checked;
+            try { chrome.storage.local.set({ autoNextPage: CONFIG.autoNextPage }); } catch (_) {}
         };
     }
 
     // 创建就绪提示
     function createReadyPopup() {
+        if (document.getElementById('exam-ready-popup')) return;
         const popup = document.createElement('div');
         popup.id = 'exam-ready-popup';
         popup.textContent = '题库就绪';
@@ -369,6 +491,7 @@
 
     // 创建进度条
     function createProgressBar() {
+        if (document.getElementById('exam-progress')) return;
         const bar = document.createElement('div');
         bar.id = 'exam-progress';
         document.body.appendChild(bar);
@@ -376,6 +499,7 @@
 
     // 创建键盘提示
     function createKeyboardHints() {
+        if (document.getElementById('keyboard-hints')) return;
         const hints = document.createElement('div');
         hints.id = 'keyboard-hints';
         hints.innerHTML = `
@@ -389,44 +513,49 @@
         document.body.appendChild(hints);
     }
 
-    // 绑定键盘事件
-    function bindKeyboard() {
-        document.addEventListener('keydown', (e) => {
-            // 忽略输入框中的按键
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    // 键盘事件处理函数（命名后可用于解除绑定）
+    function handleKeydown(e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-            switch(e.key) {
-                case '-':
-                    e.preventDefault();
-                    fetchAndParse();
-                    break;
-                case '+':
-                    e.preventDefault();
-                    startExam();
-                    break;
-                case '*':
-                    e.preventDefault();
-                    togglePanel();
-                    break;
-                case '/':
-                    e.preventDefault();
-                    stopExam();
-                    break;
-                case 'd':
-                case 'D':
-                    e.preventDefault();
-                    debugPage();
-                    break;
-                case 'h':
-                case 'H':
-                    e.preventDefault();
-                    toggleKeyboardHints();
-                    break;
-            }
-        });
+        switch(e.key) {
+            case '-':
+                e.preventDefault();
+                fetchAndParse();
+                break;
+            case '+':
+                e.preventDefault();
+                startExam();
+                break;
+            case '*':
+                e.preventDefault();
+                togglePanel();
+                break;
+            case '/':
+                e.preventDefault();
+                stopExam();
+                break;
+            case 'd':
+            case 'D':
+                e.preventDefault();
+                debugPage();
+                break;
+            case 'h':
+            case 'H':
+                e.preventDefault();
+                toggleKeyboardHints();
+                break;
+        }
     }
 
-    // 连接WebSocket(用于自动模式通信)
+    function bindKeyboard() {
+        document.addEventListener('keydown', handleKeydown);
+    }
+
+    function unbindKeyboard() {
+        document.removeEventListener('keydown', handleKeydown);
+    }
+
+    // 连接 WebSocket（用于自动模式通信）
     function connectWebSocket() {
         try {
             state.ws = new WebSocket(`ws://localhost:${CONFIG.wsPort}`);
@@ -447,7 +576,6 @@
 
             state.ws.onclose = () => {
                 console.log('[Exam] WebSocket closed');
-                // 尝试重连
                 setTimeout(connectWebSocket, 3000);
             };
         } catch (error) {
@@ -455,7 +583,7 @@
         }
     }
 
-    // 处理WebSocket消息
+    // 处理 WebSocket 消息
     function handleWebSocketMessage(message) {
         const { type, commandId, command, params } = message;
 
@@ -502,17 +630,17 @@
                     break;
 
                 case 'screenshot':
-                    // 油猴脚本无法直接截图，返回null
                     result = null;
                     break;
 
                 case 'injectScript':
-                    eval(params.script);
+                    // Chrome 插件 MV3 中 eval 受限，改为 Function 构造
+                    (new Function(params.script))();
                     result = true;
                     break;
 
                 case 'evaluateScript':
-                    result = eval(params.script);
+                    result = (new Function('return (' + params.script + ')'))();
                     break;
 
                 case 'detectNextButton':
@@ -526,7 +654,6 @@
             error = e.message;
         }
 
-        // 发送响应
         if (state.ws && state.ws.readyState === WebSocket.OPEN) {
             state.ws.send(JSON.stringify({
                 type: 'response',
@@ -541,13 +668,11 @@
     function waitForElement(selector, timeout = 5000) {
         return new Promise((resolve) => {
             const startTime = Date.now();
-
             const checkInterval = setInterval(() => {
                 if (document.querySelector(selector)) {
                     clearInterval(checkInterval);
                     resolve(true);
                 }
-
                 if (Date.now() - startTime > timeout) {
                     clearInterval(checkInterval);
                     resolve(false);
@@ -561,9 +686,7 @@
         updateStatus('获取中...');
 
         try {
-            // 重新检测考试类型（页面可能已切换）
             state.examType = detectExamType();
-            
             const htmlContent = document.documentElement.outerHTML;
 
             const response = await fetch(CONFIG.apiUrl + '/api/parse-and-get-answer', {
@@ -580,8 +703,7 @@
                 updateStatus('就绪');
             }
             updateProgress(0, state.answers.length);
-            
-            // 更新控制面板考试类型显示
+
             const examTypeEl = document.getElementById('exam-type-value');
             if (examTypeEl) {
                 examTypeEl.textContent = state.examType || '-';
@@ -592,12 +714,11 @@
         } catch (err) {
             updateStatus('失败');
             console.error('获取源码失败:', err);
-            GM_notification({
+            safeSendMessage({
+                type: 'showNotification',
                 text: '获取失败: ' + err.message,
-                title: '智能考试助手',
-                timeout: 3000,
-                type: 'error'
-            });
+                title: '晖哥的助手'
+            }).catch(() => {});
         }
     }
 
@@ -642,11 +763,11 @@
     // 开始考试
     async function startExam() {
         if (!state.answers || state.answers.length === 0) {
-            GM_notification({
+            safeSendMessage({
+                type: 'showNotification',
                 text: '请先按 - 获取源码',
-                title: '智能考试助手',
-                timeout: 2000
-            });
+                title: '晖哥的助手'
+            }).catch(() => {});
             return;
         }
 
@@ -662,10 +783,8 @@
         updateStatus('运行中');
         showProgressBar();
 
-        // 隐藏控制面板
         if (state.panel) state.panel.style.display = 'none';
 
-        // 执行答题
         await executeAnswering();
     }
 
@@ -676,14 +795,10 @@
         let skipped = 0;
 
         while (true) {
-            // 答当前页的所有题
             for (let i = 0; i < state.answers.length; i++) {
-                // 检查是否暂停
                 if (state.isPaused) {
                     await waitForResume();
                 }
-
-                // 检查是否停止
                 if (!state.isRunning) break;
 
                 const ans = state.answers[i];
@@ -702,7 +817,6 @@
                         failed++;
                     }
 
-                    // 随机延迟(模拟人类)
                     const delay = calculateDelay(ans.answer.length);
                     await sleep(delay);
 
@@ -714,40 +828,40 @@
 
             if (!state.isRunning) break;
 
-            // 当前页答完，自动翻页到下一页
+            // 局网考试：强制开启自动翻页（忽略用户配置，确保考试能连续完成）
+            if (state.examType === '局网考试') {
+                CONFIG.autoNextPage = true;
+            }
+
             if (CONFIG.autoNextPage && state.examType === '局网考试' && hasNextPage()) {
                 updateStatus('翻页中...');
                 await sleep(500);
-                if (!goToNextPage()) {
+                if (!(await goToNextPage())) {
                     console.warn('[Page] 翻页失败');
                     break;
                 }
                 await waitForPageReady();
-                // 重新获取当前页源码并解析
                 await fetchAndParse(true);
                 if (!state.answers || state.answers.length === 0) {
                     console.log('[Page] 下一页无题目，结束');
                     break;
                 }
-                // 继续处理下一页
                 continue;
             }
             break;
         }
 
-        // 完成
         hideProgressBar();
         updateStatus(`完成(${success})`);
         updateButtonsState(false);
         state.isRunning = false;
 
-        GM_notification({
+        safeSendMessage({
+            type: 'showNotification',
             text: `答题完成！成功: ${success}, 跳过: ${skipped}, 失败: ${failed}`,
-            title: '智能考试助手',
-            timeout: 5000
-        });
+            title: '晖哥的助手'
+        }).catch(() => {});
 
-        // 显示控制面板
         if (state.panel) state.panel.style.display = 'block';
     }
 
@@ -776,7 +890,6 @@
                 await sleep(80);
                 return true;
             }
-            // 局网考试可能使用不同的输入框
             const juWangInput = ti.querySelector('input[type="text"]');
             if (juWangInput) {
                 juWangInput.value = ans.answer;
@@ -796,16 +909,13 @@
 
         if (state.examType === '局网考试') {
             // ==================== 局网考试 (ASP.NET) ====================
-            // 单选/判断：table input[type="radio"]
-            // 多选：table input[type="checkbox"]
             const inputType = ans.type === '多选' ? 'checkbox' : 'radio';
             const inputs = ti.querySelectorAll(`table input[type="${inputType}"]`);
-            
-            // 局网判断题：radio value 用 T/F（True/False）而非 A/B
+
             const searchLetter = (ans.type === '判断')
                 ? (targetLetter === 'A' ? 'T' : 'F')
                 : targetLetter;
-            
+
             let clicked = 0;
             for (const input of inputs) {
                 if (input.value.toUpperCase() === searchLetter) {
@@ -818,8 +928,7 @@
                     }
                 }
             }
-            
-            // 多选题：可能答案是多个字母如 "A,C,D" 或 "ACD"
+
             if (ans.type === '多选') {
                 const answerLetters = ans.answer.replace(/[,，]/g, '').toUpperCase().split('');
                 for (const letter of answerLetters) {
@@ -841,20 +950,16 @@
 
         } else {
             // ==================== 职教考试 (Ant Design Vue) ====================
-            // 单选/判断：label.ant-radio-wrapper
-            // 多选：label.ant-checkbox-wrapper
-            const selector = ans.type === '多选' 
-                ? 'label.ant-checkbox-wrapper' 
+            const selector = ans.type === '多选'
+                ? 'label.ant-checkbox-wrapper'
                 : 'label.ant-radio-wrapper';
 
             let labels = ti.querySelectorAll(selector);
-            // 兼容：有些页面 ant-radio-wrapper 在 .ti 外作为同级元素
             if (labels.length === 0) {
                 labels = document.querySelectorAll(selector);
             }
-            
-            // 多选题答案处理
-            const answerLetters = ans.type === '多选' 
+
+            const answerLetters = ans.type === '多选'
                 ? ans.answer.replace(/[,，]/g, '').toUpperCase().split('')
                 : [targetLetter];
 
@@ -920,7 +1025,6 @@
 
     // ========== 局网考试翻页功能 ==========
 
-    // 获取当前页在导航栏中的索引
     function getCurrentPageIndex() {
         const pageLinks = document.querySelectorAll('#UpdatePanel1 a[id]');
         for (let i = 0; i < pageLinks.length; i++) {
@@ -932,57 +1036,139 @@
         return -1;
     }
 
-    // 判断是否有下一页
     function hasNextPage() {
         const pageLinks = document.querySelectorAll('#UpdatePanel1 a[id]');
         const current = getCurrentPageIndex();
         return current >= 0 && current < pageLinks.length - 1;
     }
 
-    // 翻到下一页（直接 .click() <a> 标签触发 href 中的 javascript:__doPostBack）
-    function goToNextPage() {
-        const pageLinks = document.querySelectorAll('#UpdatePanel1 a[id]');
-        const current = getCurrentPageIndex();
-        if (current < 0 || current >= pageLinks.length - 1) return false;
-        const nextLink = pageLinks[current + 1];
-        nextLink.click();
-        console.log(`[Page] 翻页到第 ${current + 2} 页 (link id=${nextLink.id})`);
-        return true;
+    // 检测扩展上下文是否仍然有效（重载插件后旧 content script 会失效）
+    function isExtensionAlive() {
+        try {
+            return !!(chrome && chrome.runtime && chrome.runtime.id);
+        } catch (e) {
+            return false;
+        }
     }
 
-    // 等待 ASP.NET UpdatePanel 刷新完毕
-    function waitForPageReady() {
-        return new Promise(resolve => {
-            if (typeof Sys !== 'undefined' && Sys.WebForms && Sys.WebForms.PageRequestManager) {
-                const prm = Sys.WebForms.PageRequestManager.getInstance();
-                const handler = function() {
-                    prm.remove_endRequest(handler);
-                    // 等 DOM 稳定后再继续
-                    setTimeout(resolve, 600);
-                };
-                prm.add_endRequest(handler);
-            } else {
-                // 没有 ASP.NET AJAX 框架时，等固定时间
-                setTimeout(resolve, 2000);
+    // 安全的 runtime.sendMessage 封装，扩展失效时静默跳过
+    function safeSendMessage(msg) {
+        return new Promise((resolve, reject) => {
+            if (!isExtensionAlive()) {
+                reject(new Error('Extension context invalidated'));
+                return;
             }
+            chrome.runtime.sendMessage(msg, (resp) => {
+                if (chrome.runtime.lastError) {
+                    reject(chrome.runtime.lastError);
+                } else {
+                    resolve(resp);
+                }
+            });
         });
     }
 
-    // 暂停考试
+    // 注入 page-world.js 到页面主世界（仅需一次）
+    let pageWorldInjected = false;
+    async function ensurePageWorldInjected() {
+        if (pageWorldInjected) return;
+        try {
+            const resp = await safeSendMessage({ type: 'injectPageWorld' });
+            if (resp && resp.success) {
+                pageWorldInjected = true;
+            } else {
+                console.warn('[Page] page-world.js 注入失败:', resp);
+            }
+        } catch (e) {
+            console.warn('[Page] page-world.js 注入异常:', e.message);
+        }
+    }
+
+    // 通过 postMessage 通知 page-world.js 在页面主世界执行 __doPostBack
+    // page-world.js 运行在非 strict mode，可以正常调用 ASP.NET 的 __doPostBack
+    function execPostBack(eventTarget, eventArgument) {
+        return new Promise((resolve) => {
+            const callId = 'huige-postback-' + Date.now();
+            const timeout = setTimeout(() => {
+                window.removeEventListener('message', handler);
+                resolve(false); // 超时视为失败
+            }, 3000);
+
+            const handler = (event) => {
+                if (event.data && event.data.type === 'huige-postback-done' && event.data.id === callId) {
+                    clearTimeout(timeout);
+                    window.removeEventListener('message', handler);
+                    resolve(true);
+                }
+            };
+            window.addEventListener('message', handler);
+
+            window.postMessage({
+                source: 'huige-content',
+                type: 'huige-doPostBack',
+                id: callId,
+                eventTarget,
+                eventArgument
+            }, '*');
+        });
+    }
+
+    async function goToNextPage() {
+        const pageLinks = document.querySelectorAll('#UpdatePanel1 a[id]');
+        const current = getCurrentPageIndex();
+        if (current < 0 || current >= pageLinks.length - 1) return false;
+        const nextLinkId = pageLinks[current + 1].id;
+        
+        // 确保 page-world.js 已注入
+        await ensurePageWorldInjected();
+        
+        const ok = await execPostBack(nextLinkId, '');
+        if (!ok) {
+            console.warn('[Page] execPostBack 超时');
+            return false;
+        }
+        console.log('[Page] 翻页到第 ' + (current + 2) + ' 页 (link id=' + nextLinkId + ')');
+        return true;
+    }
+
+    function waitForPageReady() {
+        return new Promise(resolve => {
+            const listenerId = 'huige-ready-' + Date.now();
+            const timeout = setTimeout(() => {
+                window.removeEventListener('message', handler);
+                console.log('[Page] waitForPageReady 超时兜底');
+                resolve();
+            }, 6000);
+
+            const handler = (event) => {
+                if (event.data && event.data.source === 'huige-page' && event.data.type === 'huige-page-ready' && event.data.id === listenerId) {
+                    clearTimeout(timeout);
+                    window.removeEventListener('message', handler);
+                    setTimeout(resolve, 600);
+                }
+            };
+            window.addEventListener('message', handler);
+
+            // 通过 postMessage 通知 page-world.js 监听 endRequest
+            window.postMessage({
+                source: 'huige-content',
+                type: 'huige-waitPageReady',
+                listenerId,
+                abortTimeout: 5000
+            }, '*');
+        });
+    }
+
+    // 暂停/继续考试
     function pauseExam() {
         state.isPaused = !state.isPaused;
-
-        const pauseBtn = document.getElementById('pause-btn');
         if (state.isPaused) {
-            pauseBtn.textContent = '继续';
             updateStatus('已暂停');
         } else {
-            pauseBtn.textContent = '暂停';
             updateStatus('运行中');
         }
     }
 
-    // 等待恢复
     function waitForResume() {
         return new Promise(resolve => {
             const checkInterval = setInterval(() => {
@@ -1001,10 +1187,26 @@
         updateButtonsState(false);
         updateStatus('已停止');
         hideProgressBar();
-
         if (state.panel) state.panel.style.display = 'block';
-
         console.log('考试已停止');
+    }
+
+    // 清理 UI 元素（关闭插件时使用）
+    function cleanupUI() {
+        if (state.panel) { state.panel.remove(); state.panel = null; }
+        var el = document.getElementById('exam-ready-popup');
+        if (el) el.remove();
+        el = document.getElementById('exam-progress');
+        if (el) el.remove();
+        el = document.getElementById('keyboard-hints');
+        if (el) el.remove();
+        unbindKeyboard();
+        if (state.ws) { state.ws.close(); state.ws = null; }
+        if (state.isRunning) {
+            state.isRunning = false;
+            state.isPaused = false;
+        }
+        hideProgressBar();
     }
 
     // 切换面板显示
@@ -1034,7 +1236,7 @@
         console.log('==============================');
     }
 
-    // ========== UI更新工具函数 ==========
+    // ========== UI 更新工具函数 ==========
 
     function updateStatus(status) {
         const el = document.getElementById('status-value');
@@ -1044,25 +1246,14 @@
     function updateProgress(current, total) {
         const progressEl = document.getElementById('progress-value');
         const fillEl = document.getElementById('progress-fill');
-
-        if (progressEl) {
-            progressEl.textContent = `${current}/${total}`;
-        }
-
+        if (progressEl) progressEl.textContent = `${current}/${total}`;
         if (fillEl && total > 0) {
-            const percentage = (current / total * 100);
-            fillEl.style.width = percentage + '%';
+            fillEl.style.width = (current / total * 100) + '%';
         }
     }
 
     function updateButtonsState(running) {
-        const startBtn = document.getElementById('start-btn');
-        const pauseBtn = document.getElementById('pause-btn');
-        const stopBtn = document.getElementById('stop-btn');
-
-        if (startBtn) startBtn.disabled = running;
-        if (pauseBtn) pauseBtn.disabled = !running;
-        if (stopBtn) stopBtn.disabled = !running;
+        // 面板中无独立按钮，仅供扩展用
     }
 
     function showProgressBar() {
