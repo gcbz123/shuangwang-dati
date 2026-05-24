@@ -77,7 +77,15 @@ npm run clean   # 删 node_modules + lock, 重装
 
 ## 标签搜索
 
-- Chrome 扩展: `scripts/晖哥的晖/huigedehui/` (不依赖 Tampermonkey)
-- 油猴脚本: `scripts/管理后台版/`, `auto-answer.user.js` (根目录独立版)
+- Chrome 扩展: `scripts/晖哥的晖/chrome-extension/` (Manifest V3, `content.js` 核心)
+- 油猴脚本: `scripts/管理后台版/`, `scripts/晖哥的晖/auto-answer-enhanced.user.js`
 - DOM 配置: `domConfigs/` (antDesignVue.json, generic.json)
 - 题库导入: `题库导入/` 目录 `.txt` 文件, 启动时自动扫描导入
+
+## Chrome 插件要点
+
+- popup 已简化：无操作按钮，仅状态卡片 + 设置开关（启用/自动模式/自动翻页）
+- 状态每秒轮询已去掉，只在打开 popup 时刷新一次
+- `content.js` 支持 `enabled` 配置，关闭时不注入面板/不绑快捷键
+- `manifest.json` 限定域名后，content script 仅注入白名单页面
+- 插件包：`web/tools/chrome-extension.7z`（.gitignore 排除）
