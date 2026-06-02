@@ -1,9 +1,9 @@
 const path = require('path');
 
-// 题型常量
+// 题型常量（与题库存储值和 detectQuestionType 返回值一致）
 const QUESTION_TYPES = {
-  SINGLE: 'single_choice',
-  MULTIPLE: 'multiple_choice',
+  SINGLE: 'single',
+  MULTIPLE: 'multiple',
   JUDGMENT: 'judgment',
   SHORT: 'short_answer',
 };

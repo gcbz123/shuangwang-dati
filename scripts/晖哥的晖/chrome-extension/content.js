@@ -10,8 +10,10 @@
 
     // ========== 配置 ==========
     const CONFIG = {
-        apiUrl: 'http://10.104.240.163:3500',
+        apiUrl: 'http://localhost:3500',
         wsPort: 3501,
+        checkInterval: 500,
+        enabled: true,
         autoMode: false,
         autoNextPage: true
     };
@@ -20,16 +22,17 @@
     let state = {
         panel: null,
         ws: null,
+        sessionId: null,
         isRunning: false,
         isPaused: false,
         answers: null,
         examType: null,  // '局网考试' | '职教考试' | null
         typeStats: { danxuan: 0, duoxuan: 0, panduan: 0, jianda: 0 },
+        currentQuestionIndex: 0,
         totalQuestions: 0,
         answeredCount: 0,
         skippedCount: 0,
-        apiConnected: false,
-        apiCheckTimer: null
+        avgConfidence: 0
     };
 
     // ========== 样式定义 ==========
@@ -197,7 +200,7 @@
             z-index: 999999;
             letter-spacing: 2px;
             display: none;
-            animation: fadeInOut 3s ease-in-out;
+            animation: fadeInOut 2s ease-in-out;
         }
 
         @keyframes fadeInOut {
@@ -261,8 +264,7 @@
             console.log('[Exam] 检测到职教考试 (Ant Design Vue)');
             return '职教考试';
         }
-        // 未检测到考试特征，返回 null，不在无关页面加载
-        return null;
+        return '职教考试';
     }
 
     // 根据考试类型获取题目容器
@@ -277,13 +279,16 @@
     // ========== 从 Chrome storage 加载配置 ==========
     function loadConfig() {
         try {
-            chrome.storage.local.get(['autoMode', 'autoNextPage'], (result) => {
+            chrome.storage.local.get(['enabled', 'autoMode', 'autoNextPage', 'apiUrl', 'wsPort'], (result) => {
                 if (chrome.runtime.lastError) return;
+                if (result.enabled !== undefined) CONFIG.enabled = result.enabled;
                 if (result.autoMode !== undefined) CONFIG.autoMode = result.autoMode;
                 // autoNextPage：强制默认 true（局网考试默认自动翻页）
                 CONFIG.autoNextPage = result.autoNextPage !== undefined ? result.autoNextPage : true;
+                if (result.apiUrl) CONFIG.apiUrl = result.apiUrl;
+                if (result.wsPort) CONFIG.wsPort = result.wsPort;
 
-                console.log('[Config] 加载完成 autoMode=' + CONFIG.autoMode + ' autoNextPage=' + CONFIG.autoNextPage + ' apiUrl=' + CONFIG.apiUrl);
+                console.log('[Config] 加载完成 enabled=' + CONFIG.enabled + ' autoMode=' + CONFIG.autoMode + ' autoNextPage=' + CONFIG.autoNextPage);
 
                 const autoModeEl = document.getElementById('auto-mode-checkbox');
                 const autoNextEl = document.getElementById('auto-nextpage-checkbox');
@@ -296,36 +301,40 @@
     }
 
     // ========== 初始化 ==========
-    function init() {
-        // 先注册消息监听，确保 popup 始终可通信
-        try { chrome.runtime.onMessage.addListener(handlePopupMessage); } catch (_) {}
-
-        // 无条件绑定键盘快捷键，`-` / `+` 等核心功能始终可用
-        bindKeyboard();
-        // 启动 API 心跳（仅首次注入需要，msg 里已有独立 startApiHealthCheck）
-        startApiHealthCheck();
-
-        // 检测考试类型，非考试页面不创建 UI、不连 WS
-        state.examType = detectExamType();
-        if (state.examType === null) {
-            console.log('[Exam] 非考试页面，插件轻量模式已启动');
-            console.log('快捷键: - 获取源码 | + 开始答题（可用，如适用）');
-            return;
-        }
-
-        // 注入样式
+    async function init() {
+        // 注入样式（不受启用开关影响）
         const style = document.createElement('style');
         style.textContent = STYLES;
         document.head.appendChild(style);
+
+        // 监听来自 popup 的消息（始终监听，确保能收到启用/禁用指令）
+        try { chrome.runtime.onMessage.addListener(handlePopupMessage); } catch (_) {}
+
+        // 读取启用状态
+        try {
+            const config = await new Promise(resolve => {
+                chrome.storage.local.get(['enabled'], resolve);
+            });
+            CONFIG.enabled = config.enabled !== false;
+        } catch (_) {}
+
+        if (!CONFIG.enabled) {
+            console.log('晖哥的助手 已关闭（可通过 popup 启用）');
+            return;
+        }
 
         createControlPanel();
         createReadyPopup();
         createProgressBar();
         createKeyboardHints();
+        bindKeyboard();
         connectWebSocket();
 
-        // 从 storage 加载配置
+        // 从 storage 加载其他配置
         loadConfig();
+
+        // 自动检测考试类型
+        state.examType = detectExamType();
 
         // 检测到局网考试后，注入 page-world.js 到页面主世界
         if (state.examType === '局网考试') {
@@ -363,40 +372,35 @@
                 sendResponse({
                     success: true,
                     status: {
+                        enabled: CONFIG.enabled,
                         examType: state.examType,
                         isRunning: state.isRunning,
                         answeredCount: state.answeredCount,
                         totalQuestions: state.totalQuestions,
                         hasAnswers: !!(state.answers && state.answers.length > 0),
-                        answersCount: state.answers ? state.answers.length : 0,
-                        apiConnected: state.apiConnected
+                        answersCount: state.answers ? state.answers.length : 0
                     }
                 });
                 break;
             case 'updateConfig':
                 if (message.enabled !== undefined) {
+                    CONFIG.enabled = message.enabled;
                     if (message.enabled) {
-                        // 启用：先检测考试类型，非考试页面不创建 UI
                         if (!state.panel) {
-                            const detected = detectExamType();
-                            if (detected === null) {
-                                console.log('[Exam] 非考试页面，插件不加载');
-                                sendResponse({ success: true });
-                                return;
-                            }
-                            state.examType = detected;
                             createControlPanel();
                             createReadyPopup();
                             createProgressBar();
                             createKeyboardHints();
                             bindKeyboard();
                             connectWebSocket();
-                            startApiHealthCheck();
+                            loadConfig();
+                            state.examType = detectExamType();
+                            if (state.examType === '局网考试') {
+                                ensurePageWorldInjected().catch(function() {});
+                            }
                         }
                     } else {
-                        // 禁用：清理 UI，停止 API 检测
                         cleanupUI();
-                        stopApiHealthCheck();
                     }
                 }
                 if (message.autoMode !== undefined) CONFIG.autoMode = message.autoMode;
@@ -478,6 +482,7 @@
 
     // 创建就绪提示
     function createReadyPopup() {
+        if (document.getElementById('exam-ready-popup')) return;
         const popup = document.createElement('div');
         popup.id = 'exam-ready-popup';
         popup.textContent = '题库就绪';
@@ -486,6 +491,7 @@
 
     // 创建进度条
     function createProgressBar() {
+        if (document.getElementById('exam-progress')) return;
         const bar = document.createElement('div');
         bar.id = 'exam-progress';
         document.body.appendChild(bar);
@@ -493,6 +499,7 @@
 
     // 创建键盘提示
     function createKeyboardHints() {
+        if (document.getElementById('keyboard-hints')) return;
         const hints = document.createElement('div');
         hints.id = 'keyboard-hints';
         hints.innerHTML = `
@@ -506,26 +513,9 @@
         document.body.appendChild(hints);
     }
 
-    // 判断当前焦点是否在可编辑元素内（输入框、文本框等）
-    function isEditableTarget(target) {
-        // 排除 INPUT / TEXTAREA / SELECT
-        const tag = target.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
-        // 排除 contenteditable 元素
-        if (target.isContentEditable) return true;
-        // 排除 ARIA 角色
-        if (target.getAttribute('role') === 'textbox') return true;
-        return false;
-    }
-
-    // 键盘事件处理函数（命名函数，便于移除）
-    function handleKeyDown(e) {
-        // 在可编辑元素中不拦截按键，避免干扰用户名/密码等输入
-        if (isEditableTarget(e.target)) return;
-
-        // 额外安全：如果焦点在 shadow DOM 或 iframe 内的可编辑区域也排除
-        const activeEl = document.activeElement;
-        if (activeEl && activeEl !== e.target && isEditableTarget(activeEl)) return;
+    // 键盘事件处理函数（命名后可用于解除绑定）
+    function handleKeydown(e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
         switch(e.key) {
             case '-':
@@ -533,7 +523,6 @@
                 fetchAndParse();
                 break;
             case '+':
-            case '=':  // 主键盘 = 键（+ 需 Shift+=，部分系统下 key 为 '='）
                 e.preventDefault();
                 startExam();
                 break;
@@ -558,76 +547,21 @@
         }
     }
 
-    // 绑定键盘事件
     function bindKeyboard() {
-        document.removeEventListener('keydown', handleKeyDown);
-        document.addEventListener('keydown', handleKeyDown);
+        document.addEventListener('keydown', handleKeydown);
     }
 
-    // 检测 API 服务器是否可达
-    async function checkApiConnection() {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3000);
-            const response = await fetch(`${CONFIG.apiUrl}/api/health`, {
-                method: 'GET',
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-
-            const wasConnected = state.apiConnected;
-            state.apiConnected = response.ok;
-
-            if (state.apiConnected && !wasConnected) {
-                console.log('[API] 服务器已连接');
-                updateStatus('API 已连接');
-            } else if (!state.apiConnected && wasConnected) {
-                console.warn('[API] 服务器断开');
-                updateStatus('API 未连接');
-            }
-        } catch (err) {
-            console.warn('[API] 健康检查失败:', err.message);
-            if (state.apiConnected) {
-                state.apiConnected = false;
-                console.warn('[API] 服务器未响应');
-                updateStatus('API 未连接');
-            }
-            // 首次连接失败也记录日志，便于排查
-            if (!state.apiConnected) {
-                console.log('[API] 服务器未连接（首次或持续）');
-            }
-        }
-    }
-
-    // 启动 API 状态定时检测
-    function startApiHealthCheck() {
-        if (state.apiCheckTimer) return;
-        checkApiConnection();
-        state.apiCheckTimer = setInterval(checkApiConnection, 10000);
-    }
-
-    // 停止 API 状态定时检测
-    function stopApiHealthCheck() {
-        if (state.apiCheckTimer) {
-            clearInterval(state.apiCheckTimer);
-            state.apiCheckTimer = null;
-        }
-        state.apiConnected = false;
+    function unbindKeyboard() {
+        document.removeEventListener('keydown', handleKeydown);
     }
 
     // 连接 WebSocket（用于自动模式通信）
-    let _wsRetryCount = 0;
-    const _wsMaxRetries = 10;
-    const _wsBaseDelay = 3000;
-
     function connectWebSocket() {
         try {
-            const wsHost = CONFIG.apiUrl.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
-            state.ws = new WebSocket(`ws://${wsHost}:${CONFIG.wsPort}`);
+            state.ws = new WebSocket(`ws://localhost:${CONFIG.wsPort}`);
 
             state.ws.onopen = () => {
                 console.log('[Exam] WebSocket connected');
-                _wsRetryCount = 0;
                 updateStatus('connected');
             };
 
@@ -642,15 +576,7 @@
 
             state.ws.onclose = () => {
                 console.log('[Exam] WebSocket closed');
-                // 指数退避重连：3s → 6s → 12s ... 上限 60s，最多重试 10 次
-                if (_wsRetryCount < _wsMaxRetries) {
-                    const delay = Math.min(_wsBaseDelay * Math.pow(2, _wsRetryCount), 60000);
-                    _wsRetryCount++;
-                    console.log(`[Exam] 重连第 ${_wsRetryCount} 次，等待 ${delay / 1000}s`);
-                    setTimeout(connectWebSocket, delay);
-                } else {
-                    console.warn('[Exam] WebSocket 超过最大重连次数，停止重连');
-                }
+                setTimeout(connectWebSocket, 3000);
             };
         } catch (error) {
             console.warn('[Exam] WebSocket connection failed:', error.message);
@@ -703,14 +629,18 @@
                     result = waitForElement(params.selector, params.timeout);
                     break;
 
+                case 'screenshot':
+                    result = null;
+                    break;
+
                 case 'injectScript':
-                    // [安全] new Function() 已移除，不再支持任意脚本注入
-                    error = 'injectScript disabled for security';
+                    // Chrome 插件 MV3 中 eval 受限，改为 Function 构造
+                    (new Function(params.script))();
+                    result = true;
                     break;
 
                 case 'evaluateScript':
-                    // [安全] new Function() 已移除，使用结构化命令代替
-                    error = 'evaluateScript disabled for security';
+                    result = (new Function('return (' + params.script + ')'))();
                     break;
 
                 case 'detectNextButton':
@@ -756,9 +686,7 @@
         updateStatus('获取中...');
 
         try {
-            // [安全] 仅在检测到有效类型时更新，防止翻页时被覆盖为 null
-            const detected = detectExamType();
-            if (detected !== null) state.examType = detected;
+            state.examType = detectExamType();
             const htmlContent = document.documentElement.outerHTML;
 
             const response = await fetch(CONFIG.apiUrl + '/api/parse-and-get-answer', {
@@ -825,38 +753,11 @@
 
     // 显示就绪提示
     function showReadyPopup() {
-        let popup = document.getElementById('exam-ready-popup');
-        if (!popup) {
-            // 浮窗不存在时即时创建，不依赖 init 中的 UI 创建流程
-            popup = document.createElement('div');
-            popup.id = 'exam-ready-popup';
-            popup.textContent = '题库就绪';
-            // 内联样式，白色毛玻璃透明风格
-            Object.assign(popup.style, {
-                position: 'fixed',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                background: 'rgba(255, 255, 255, 0.65)',
-                backdropFilter: 'blur(16px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-                color: '#1e293b',
-                padding: '12px 24px',
-                borderRadius: '10px',
-                fontSize: '15px',
-                fontWeight: '600',
-                letterSpacing: '1.5px',
-                zIndex: '999999',
-                border: '1px solid rgba(255,255,255,0.4)',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                display: 'none'
-            });
-            document.body.appendChild(popup);
-        }
+        const popup = document.getElementById('exam-ready-popup');
         popup.style.display = 'block';
         setTimeout(() => {
-            if (popup) popup.style.display = 'none';
-        }, 1000);
+            popup.style.display = 'none';
+        }, 2000);
     }
 
     // 开始考试
@@ -878,6 +779,7 @@
         state.answeredCount = 0;
         state.skippedCount = 0;
 
+        updateButtonsState(true);
         updateStatus('运行中');
         showProgressBar();
 
@@ -951,6 +853,7 @@
 
         hideProgressBar();
         updateStatus(`完成(${success})`);
+        updateButtonsState(false);
         state.isRunning = false;
 
         safeSendMessage({
@@ -960,48 +863,6 @@
         }).catch(() => {});
 
         if (state.panel) state.panel.style.display = 'block';
-    }
-
-    // 在指定容器内查找匹配答案的选项并点击
-    function clickOptionInContainer(ti, ans, targetLetter) {
-        if (ans.type === '多选') {
-            const answerLetters = ans.answer.replace(/[,，]/g, '').toUpperCase().split('');
-            const selector = 'label.ant-checkbox-wrapper';
-            let labels = ti.querySelectorAll(selector);
-            let clicked = 0;
-            for (const letter of answerLetters) {
-                for (const label of labels) {
-                    const input = label.querySelector('input[type="checkbox"]');
-                    if (input && input.value.toUpperCase() === letter) {
-                        label.click();
-                        clicked++;
-                        break;
-                    }
-                }
-            }
-            return clicked > 0 ? clicked : 0;
-        } else {
-            const selector = 'label.ant-radio-wrapper';
-            const labels = ti.querySelectorAll(selector);
-            for (const label of labels) {
-                const input = label.querySelector('input[type="radio"]');
-                if (input && input.value.toUpperCase() === targetLetter) {
-                    label.click();
-                    return 1;
-                }
-            }
-            // 回退：直接查找 input（仅在容器内）
-            const inputSelector = `input[type="radio"]`;
-            const inputs = ti.querySelectorAll(inputSelector);
-            for (const input of inputs) {
-                if (input.value.toUpperCase() === targetLetter) {
-                    input.click();
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
-                    return 1;
-                }
-            }
-            return 0;
-        }
     }
 
     // 回答单道题
@@ -1029,6 +890,15 @@
                 await sleep(80);
                 return true;
             }
+            const juWangInput = ti.querySelector('input[type="text"]');
+            if (juWangInput) {
+                juWangInput.value = ans.answer;
+                juWangInput.dispatchEvent(new Event('input', { bubbles: true }));
+                juWangInput.dispatchEvent(new Event('change', { bubbles: true }));
+                console.log(`填写第${ans.num}题简答 (局网)`);
+                await sleep(80);
+                return true;
+            }
             return false;
         }
 
@@ -1046,9 +916,21 @@
                 ? (targetLetter === 'A' ? 'T' : 'F')
                 : targetLetter;
 
+            let clicked = 0;
+            for (const input of inputs) {
+                if (input.value.toUpperCase() === searchLetter) {
+                    input.click();
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    clicked++;
+                    if (inputType === 'radio') {
+                        console.log(`局网考试-第${ans.num}题已点击: ${targetLetter}`);
+                        return true;
+                    }
+                }
+            }
+
             if (ans.type === '多选') {
                 const answerLetters = ans.answer.replace(/[,，]/g, '').toUpperCase().split('');
-                let clicked = 0;
                 for (const letter of answerLetters) {
                     for (const input of inputs) {
                         if (input.value.toUpperCase() === letter) {
@@ -1061,32 +943,60 @@
                 }
                 console.log(`局网考试-多选第${ans.num}题: 成功 ${clicked}/${answerLetters.length}`);
                 return clicked > 0;
-            } else {
-                for (const input of inputs) {
-                    if (input.value.toUpperCase() === searchLetter) {
-                        input.click();
-                        input.dispatchEvent(new Event('change', { bubbles: true }));
-                        console.log(`局网考试-第${ans.num}题已点击: ${targetLetter}`);
-                        return true;
-                    }
-                }
-                console.warn(`局网考试-第${ans.num}题未找到选项: ${searchLetter}`);
-                return false;
             }
+
+            console.warn(`局网考试-第${ans.num}题未找到选项: ${searchLetter}`);
+            return false;
 
         } else {
             // ==================== 职教考试 (Ant Design Vue) ====================
-            // 仅在当前题目容器内查找，绝不回退到全局查询（防止跨题目污染）
-            const clicked = clickOptionInContainer(ti, ans, targetLetter);
+            const selector = ans.type === '多选'
+                ? 'label.ant-checkbox-wrapper'
+                : 'label.ant-radio-wrapper';
+
+            let labels = ti.querySelectorAll(selector);
+            if (labels.length === 0) {
+                labels = document.querySelectorAll(selector);
+            }
+
+            const answerLetters = ans.type === '多选'
+                ? ans.answer.replace(/[,，]/g, '').toUpperCase().split('')
+                : [targetLetter];
+
+            let clicked = 0;
+            for (const letter of answerLetters) {
+                for (const label of labels) {
+                    const input = label.querySelector(`input[type="${ans.type === '多选' ? 'checkbox' : 'radio'}"]`);
+                    if (input && input.value.toUpperCase() === letter) {
+                        label.click();
+                        await sleep(50);
+                        clicked++;
+                        break;
+                    }
+                }
+            }
 
             if (clicked > 0) {
-                const countLabel = ans.type === '多选' ? `成功 ${clicked}/${ans.answer.replace(/[,，]/g, '').length}` : targetLetter;
-                console.log(`职教考试-${ans.type}第${ans.num}题: ${countLabel}`);
+                console.log(`职教考试-${ans.type}第${ans.num}题: 成功 ${clicked}/${answerLetters.length}`);
                 await sleep(100);
                 return true;
             }
 
-            console.warn(`职教考试-第${ans.num}题未找到选项: ${targetLetter} (容器内无匹配)`);
+            // 回退：尝试直接查找 input
+            let inputs = ti.querySelectorAll(`input[type="${ans.type === '多选' ? 'checkbox' : 'radio'}"]`);
+            if (inputs.length === 0) {
+                inputs = document.querySelectorAll(`input[type="${ans.type === '多选' ? 'checkbox' : 'radio'}"]`);
+            }
+            for (const input of inputs) {
+                if (input.value.toUpperCase() === targetLetter) {
+                    input.click();
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    console.log(`职教考试-第${ans.num}题已点击(回退): ${targetLetter}`);
+                    return true;
+                }
+            }
+
+            console.warn(`职教考试-第${ans.num}题未找到选项: ${targetLetter}`);
             return false;
         }
     }
@@ -1094,8 +1004,9 @@
     // 计算随机延迟
     function calculateDelay(questionLength) {
         const baseDelay = 200;
+        const perCharDelay = 0;
         const randomFactor = Math.random() * 0.2 + 0.9;
-        return baseDelay * randomFactor;
+        return (baseDelay + questionLength * perCharDelay) * randomFactor;
     }
 
     // 查找下一题按钮
@@ -1174,7 +1085,7 @@
     }
 
     // 通过 postMessage 通知 page-world.js 在页面主世界执行 __doPostBack
-    // page-world.js 运行在非 strict mode，可以正常调用 ASP.NET 的 _doPostBack
+    // page-world.js 运行在非 strict mode，可以正常调用 ASP.NET 的 __doPostBack
     function execPostBack(eventTarget, eventArgument) {
         return new Promise((resolve) => {
             const callId = 'huige-postback-' + Date.now();
@@ -1184,8 +1095,6 @@
             }, 3000);
 
             const handler = (event) => {
-                // [安全] 仅接受同源消息
-                if (event.origin !== window.location.origin) return;
                 if (event.data && event.data.type === 'huige-postback-done' && event.data.id === callId) {
                     clearTimeout(timeout);
                     window.removeEventListener('message', handler);
@@ -1200,7 +1109,7 @@
                 id: callId,
                 eventTarget,
                 eventArgument
-            }, window.location.origin);
+            }, '*');
         });
     }
 
@@ -1232,8 +1141,6 @@
             }, 6000);
 
             const handler = (event) => {
-                // [安全] 仅接受同源消息
-                if (event.origin !== window.location.origin) return;
                 if (event.data && event.data.source === 'huige-page' && event.data.type === 'huige-page-ready' && event.data.id === listenerId) {
                     clearTimeout(timeout);
                     window.removeEventListener('message', handler);
@@ -1248,8 +1155,18 @@
                 type: 'huige-waitPageReady',
                 listenerId,
                 abortTimeout: 5000
-            }, window.location.origin);
+            }, '*');
         });
+    }
+
+    // 暂停/继续考试
+    function pauseExam() {
+        state.isPaused = !state.isPaused;
+        if (state.isPaused) {
+            updateStatus('已暂停');
+        } else {
+            updateStatus('运行中');
+        }
     }
 
     function waitForResume() {
@@ -1267,10 +1184,29 @@
     function stopExam() {
         state.isRunning = false;
         state.isPaused = false;
+        updateButtonsState(false);
         updateStatus('已停止');
         hideProgressBar();
         if (state.panel) state.panel.style.display = 'block';
         console.log('考试已停止');
+    }
+
+    // 清理 UI 元素（关闭插件时使用）
+    function cleanupUI() {
+        if (state.panel) { state.panel.remove(); state.panel = null; }
+        var el = document.getElementById('exam-ready-popup');
+        if (el) el.remove();
+        el = document.getElementById('exam-progress');
+        if (el) el.remove();
+        el = document.getElementById('keyboard-hints');
+        if (el) el.remove();
+        unbindKeyboard();
+        if (state.ws) { state.ws.close(); state.ws = null; }
+        if (state.isRunning) {
+            state.isRunning = false;
+            state.isPaused = false;
+        }
+        hideProgressBar();
     }
 
     // 切换面板显示
@@ -1283,31 +1219,7 @@
     // 切换键盘提示
     function toggleKeyboardHints() {
         const hints = document.getElementById('keyboard-hints');
-        if (!hints) return;
         hints.style.display = hints.style.display === 'none' ? 'block' : 'none';
-    }
-
-    // 清理 UI（禁用插件时调用）
-    function cleanupUI() {
-        if (state.panel) {
-            state.panel.remove();
-            state.panel = null;
-        }
-        const popup = document.getElementById('exam-ready-popup');
-        if (popup) popup.remove();
-        const progress = document.getElementById('exam-progress');
-        if (progress) progress.remove();
-        const hints = document.getElementById('keyboard-hints');
-        if (hints) hints.remove();
-        // 移除键盘事件监听器
-        document.removeEventListener('keydown', handleKeyDown);
-        // 关闭 WebSocket
-        if (state.ws) {
-            state.ws.close();
-            state.ws = null;
-        }
-        // 停止 API 检测
-        stopApiHealthCheck();
     }
 
     // 调试页面
@@ -1338,6 +1250,10 @@
         if (fillEl && total > 0) {
             fillEl.style.width = (current / total * 100) + '%';
         }
+    }
+
+    function updateButtonsState(running) {
+        // 面板中无独立按钮，仅供扩展用
     }
 
     function showProgressBar() {

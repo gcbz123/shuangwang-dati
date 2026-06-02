@@ -58,6 +58,17 @@ $env:FUSE_THRESHOLD=0.20; node index.js
 
 **阈值**: 默认 `FUSE_THRESHOLD=0.22` (越小越严格), 可通过 API 实时调整。
 
+## 标签搜索
+- Chrome 扩展: `scripts/晖哥的晖/chrome-extension/` (Manifest V3, `content.js` 核心)
+- 油猴脚本: `scripts/管理后台版/`, `scripts/晖哥的晖/auto-answer-enhanced.user.js`
+- DOM 配置: `domConfigs/` (antDesignVue.json, generic.json)
+- 题库导入: `题库导入/` 目录 `.txt` 文件, 启动时自动扫描导入
+
+## Chrome 插件要点
+- `content.js` 支持 `enabled` 配置，关闭时不注入面板/不绑快捷键
+- `manifest.json` 限定域名后，content script 仅注入白名单页面
+- 职教考试答题时，选项点击**严格限定在当前题目容器内**，不回退到全局查询（防跨题目污染）
+
 ## 其他注意
 - 启动时自动扫描 `题库导入/` 目录 `.txt` 文件并导入 (去重后 `saveQuestionBank` + `invalidateFuse`)
 - CORS: 开发环境 `*`; 生产环境 `ALLOWED_ORIGINS` 为空时仅同源 (不设 CORS 头)

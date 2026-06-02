@@ -23,7 +23,7 @@
         wsPort: 3501,  // WebSocket端口
         checkInterval: 500,
         autoMode: false,  // 默认手动模式
-        autoNextPage: false  // 局网考试自动翻页
+        autoNextPage: true  // 局网考试自动翻页，默认开
     };
 
     // ========== 状态管理 ==========
@@ -939,18 +939,13 @@
         return current >= 0 && current < pageLinks.length - 1;
     }
 
-    // 翻到下一页（点击页面导航链接）
+    // 翻到下一页（直接 .click() <a> 标签触发 href 中的 javascript:__doPostBack）
     function goToNextPage() {
-        // 直接调用 ASP.NET 的 __doPostBack
-        if (typeof __doPostBack !== 'function') {
-            console.warn('[Page] __doPostBack 不可用');
-            return false;
-        }
         const pageLinks = document.querySelectorAll('#UpdatePanel1 a[id]');
         const current = getCurrentPageIndex();
         if (current < 0 || current >= pageLinks.length - 1) return false;
         const nextLink = pageLinks[current + 1];
-        __doPostBack(nextLink.id, '');
+        nextLink.click();
         console.log(`[Page] 翻页到第 ${current + 2} 页 (link id=${nextLink.id})`);
         return true;
     }

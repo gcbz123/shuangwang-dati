@@ -391,41 +391,48 @@ class ExamOrchestrator {
       return;
     }
 
-    const answerLetters = parseAnswerLetters(answer.answer, {
+    const answerResults = parseAnswerLetters(answer.answer, {
       option_a: question.option_a,
       option_b: question.option_b,
       option_c: question.option_c,
       option_d: question.option_d
     });
 
-    logger.debug(`[ExamOrchestrator] Answer letters: ${answerLetters}`);
+    if (!answerResults || answerResults.length === 0) {
+      logger.warn('[ExamOrchestrator] Failed to parse answer letters');
+      return;
+    }
+
+    logger.debug(`[ExamOrchestrator] Answer results: ${JSON.stringify(answerResults)}`);
 
     // 获取DOM配置
     const domConfig = session.domConfig || await this.getDefaultDomConfig();
     const optionSelector = domConfig.optionLabels || 'label.ant-radio-wrapper, label.ant-checkbox-wrapper';
 
-    // 单选/判断题: 点击radio
-    if (question.option_a && !question.option_e && !answerLetters.includes(',')) {
-      const letter = answerLetters.toUpperCase();
+    // 简答题: 直接填写文本（letter 为空）
+    if (answerResults[0].letter === '' && answerResults[0].answer) {
+      const textarea = domConfig.textarea || 'textarea, input[type="text"]';
+      await driver.fillInput(textarea, answerResults[0].answer);
+      logger.debug('[ExamOrchestrator] Filled textarea with answer text');
+      return;
+    }
+
+    // 单选题/判断题: 单个选项
+    if (answerResults.length === 1) {
+      const letter = answerResults[0].letter;
       const selector = `${optionSelector}:nth-child(${this.letterToIndex(letter)})`;
       await driver.click(selector);
       logger.debug(`[ExamOrchestrator] Clicked option ${letter}`);
     }
-    // 多选题: 点击多个checkbox
-    else if (answerLetters.includes(',')) {
-      const letters = answerLetters.split(',').map(l => l.trim().toUpperCase());
-      for (const letter of letters) {
-        const selector = `${optionSelector}:nth-child(${this.letterToIndex(letter)})`;
+    // 多选题: 多个选项
+    else {
+      for (const item of answerResults) {
+        const selector = `${optionSelector}:nth-child(${this.letterToIndex(item.letter)})`;
         await driver.click(selector);
         await this.sleep(200); // 多选间隔
       }
-      logger.debug(`[ExamOrchestrator] Clicked multiple options: ${letters.join(',')}`);
-    }
-    // 简答题: 填写文本
-    else {
-      const textarea = domConfig.textarea || 'textarea, input[type="text"]';
-      await driver.fillInput(textarea, answer.answer);
-      logger.debug('[ExamOrchestrator] Filled textarea with answer text');
+      const letters = answerResults.map(a => a.letter).join(',');
+      logger.debug(`[ExamOrchestrator] Clicked multiple options: ${letters}`);
     }
   }
 

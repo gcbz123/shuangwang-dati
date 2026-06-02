@@ -141,12 +141,34 @@ class PuppeteerDriver extends BrowserDriver {
   }
 
   /**
-   * 点击元素
-   * @param {string} selector - CSS选择器
+   * 点击元素（支持 :contains() 伪选择器）
+   * @param {string} selector - CSS选择器（可含 :contains()）
    * @returns {Promise<void>}
    */
   async click(selector) {
     try {
+      // 处理 :contains() 伪选择器
+      const containsMatch = selector.match(/^(.+?):contains\(["'](.+?)["']\)$/);
+      if (containsMatch) {
+        const [, baseSelector, searchText] = containsMatch;
+        await this.page.evaluate(
+          (sel, text) => {
+            const els = document.querySelectorAll(sel);
+            for (const el of els) {
+              if (el.textContent && el.textContent.includes(text)) {
+                el.click();
+                return;
+              }
+            }
+            throw new Error('Element with text not found: ' + text);
+          },
+          baseSelector,
+          searchText
+        );
+        logger.debug(`[PuppeteerDriver] Clicked (contains): ${selector}`);
+        return;
+      }
+
       await this.page.waitForSelector(selector, { timeout: 5000 });
       await this.page.click(selector);
       logger.debug(`[PuppeteerDriver] Clicked: ${selector}`);
@@ -185,13 +207,37 @@ class PuppeteerDriver extends BrowserDriver {
   }
 
   /**
-   * 等待元素出现
-   * @param {string} selector - CSS选择器
+   * 等待元素出现（支持 :contains() 伪选择器）
+   * @param {string} selector - CSS选择器（可含 :contains()）
    * @param {number} timeout - 超时时间(毫秒)
    * @returns {Promise<boolean>}
    */
   async waitForElement(selector, timeout = 5000) {
     try {
+      // 处理 :contains() 伪选择器 → 使用 JS evaluate 查找
+      const containsMatch = selector.match(/^(.+?):contains\(["'](.+?)["']\)$/);
+      if (containsMatch) {
+        const [, baseSelector, searchText] = containsMatch;
+        const startTime = Date.now();
+        while (Date.now() - startTime < timeout) {
+          const found = await this.page.evaluate(
+            (sel, text) => {
+              const els = document.querySelectorAll(sel);
+              for (const el of els) {
+                if (el.textContent && el.textContent.includes(text)) {
+                  return true;
+                }
+              }
+              return false;
+            },
+            baseSelector,
+            searchText
+          );
+          if (found) return true;
+          await new Promise(r => setTimeout(r, 200));
+        }
+        return false;
+      }
       await this.page.waitForSelector(selector, { timeout });
       return true;
     } catch (error) {
