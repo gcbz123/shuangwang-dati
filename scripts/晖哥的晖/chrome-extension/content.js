@@ -865,6 +865,45 @@
         if (state.panel) state.panel.style.display = 'block';
     }
 
+    // 在指定容器内查找匹配答案的选项并点击（仅容器内，防跨题目污染）
+    function clickOptionInContainer(ti, ans, targetLetter) {
+        if (ans.type === '多选') {
+            const answerLetters = ans.answer.replace(/[,，]/g, '').toUpperCase().split('');
+            const labels = ti.querySelectorAll('label.ant-checkbox-wrapper');
+            let clicked = 0;
+            for (const letter of answerLetters) {
+                for (const label of labels) {
+                    const input = label.querySelector('input[type="checkbox"]');
+                    if (input && input.value.toUpperCase() === letter) {
+                        label.click();
+                        clicked++;
+                        break;
+                    }
+                }
+            }
+            return clicked;
+        } else {
+            const labels = ti.querySelectorAll('label.ant-radio-wrapper');
+            for (const label of labels) {
+                const input = label.querySelector('input[type="radio"]');
+                if (input && input.value.toUpperCase() === targetLetter) {
+                    label.click();
+                    return 1;
+                }
+            }
+            // 回退：直接查找 input（仅在容器内）
+            const inputs = ti.querySelectorAll('input[type="radio"]');
+            for (const input of inputs) {
+                if (input.value.toUpperCase() === targetLetter) {
+                    input.click();
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    return 1;
+                }
+            }
+            return 0;
+        }
+    }
+
     // 回答单道题
     async function answerQuestion(ans) {
         console.log(`开始回答第${ans.num}题, 类型:${ans.type}, 答案:${ans.answer}, 考试类型:${state.examType}`);
@@ -950,53 +989,17 @@
 
         } else {
             // ==================== 职教考试 (Ant Design Vue) ====================
-            const selector = ans.type === '多选'
-                ? 'label.ant-checkbox-wrapper'
-                : 'label.ant-radio-wrapper';
-
-            let labels = ti.querySelectorAll(selector);
-            if (labels.length === 0) {
-                labels = document.querySelectorAll(selector);
-            }
-
-            const answerLetters = ans.type === '多选'
-                ? ans.answer.replace(/[,，]/g, '').toUpperCase().split('')
-                : [targetLetter];
-
-            let clicked = 0;
-            for (const letter of answerLetters) {
-                for (const label of labels) {
-                    const input = label.querySelector(`input[type="${ans.type === '多选' ? 'checkbox' : 'radio'}"]`);
-                    if (input && input.value.toUpperCase() === letter) {
-                        label.click();
-                        await sleep(50);
-                        clicked++;
-                        break;
-                    }
-                }
-            }
+            // 仅在当前题目容器内查找，绝不回退到全局查询（防止跨题目污染）
+            const clicked = clickOptionInContainer(ti, ans, targetLetter);
 
             if (clicked > 0) {
-                console.log(`职教考试-${ans.type}第${ans.num}题: 成功 ${clicked}/${answerLetters.length}`);
+                const countLabel = ans.type === '多选' ? `成功 ${clicked}/${ans.answer.replace(/[,，]/g, '').length}` : targetLetter;
+                console.log(`职教考试-${ans.type}第${ans.num}题: ${countLabel}`);
                 await sleep(100);
                 return true;
             }
 
-            // 回退：尝试直接查找 input
-            let inputs = ti.querySelectorAll(`input[type="${ans.type === '多选' ? 'checkbox' : 'radio'}"]`);
-            if (inputs.length === 0) {
-                inputs = document.querySelectorAll(`input[type="${ans.type === '多选' ? 'checkbox' : 'radio'}"]`);
-            }
-            for (const input of inputs) {
-                if (input.value.toUpperCase() === targetLetter) {
-                    input.click();
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
-                    console.log(`职教考试-第${ans.num}题已点击(回退): ${targetLetter}`);
-                    return true;
-                }
-            }
-
-            console.warn(`职教考试-第${ans.num}题未找到选项: ${targetLetter}`);
+            console.warn(`职教考试-第${ans.num}题未找到选项: ${targetLetter} (容器内无匹配)`);
             return false;
         }
     }
